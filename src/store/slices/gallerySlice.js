@@ -40,8 +40,16 @@ const gallerySlice = createSlice({
       state.items = []
       saveGalleryToStorage([])
     },
+    updatePhotoUrl: (state, action) => {
+      const { id, url } = action.payload
+      const photo = state.items.find((item) => item.id === id)
+      if (photo) {
+        photo.url = url
+        saveGalleryToStorage(state.items)
+      }
+    },
   },
 })
 
-export const { addPhoto, deletePhoto, clearGallery } = gallerySlice.actions
+export const { addPhoto, deletePhoto, clearGallery, updatePhotoUrl } = gallerySlice.actions
 export default gallerySlice.reducer

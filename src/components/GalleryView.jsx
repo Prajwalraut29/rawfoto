@@ -1,9 +1,32 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { deletePhoto } from '../store/slices/gallerySlice'
+import { deletePhoto, updatePhotoUrl } from '../store/slices/gallerySlice' // <-- you'll need updatePhotoUrl action
 import { createUncompressedTiff } from '../utils/tiffWriter'
-import { XIcon, DownloadIcon, Trash2Icon, InfoIcon, CalendarIcon, CameraIcon } from 'lucide-react'
+import { XIcon, DownloadIcon, Trash2Icon, InfoIcon, CalendarIcon, CameraIcon, Loader2Icon } from 'lucide-react'
+// import { motion, AnimatePresence } from 'framer-motion'
 import { motion, AnimatePresence } from 'framer-motion'
+
+/** Convert a blob URL to a permanent data URL (base64) */
+const blobUrlToDataUrl = (blobUrl) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous' // just in case
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth || img.width
+      canvas.height = img.naturalHeight || img.height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      try {
+        resolve(canvas.toDataURL('image/png'))
+      } catch (e) {
+        reject(e)
+      }
+    }
+    img.onerror = () => reject(new Error('Failed to load image from blob URL'))
+    img.src = blobUrl
+  })
+}
 
 export function GalleryView({ isOpen, onClose }) {
   const dispatch = useDispatch()
@@ -11,19 +34,70 @@ export function GalleryView({ isOpen, onClose }) {
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [isExporting, setIsExporting] = useState(false)
 
+  // Stable data URLs for all photos (id → dataUrl)
+  const [stableUrls, setStableUrls] = useState({})
+  const [isConverting, setIsConverting] = useState(false)
+  const conversionInProgress = useRef(false)
+
+  // Whenever the photo list changes, convert any blob URLs
+  useEffect(() => {
+    if (!isOpen || photos.length === 0) return
+
+    const convertAll = async () => {
+      // Prevent overlapping conversions
+      if (conversionInProgress.current) return
+      conversionInProgress.current = true
+      setIsConverting(true)
+
+      const updates = {}
+      const promises = photos.map(async (photo) => {
+        // Only convert if the stored URL is a blob and we don't have a stable version yet
+        if (photo.url && photo.url.startsWith('blob:') && !stableUrls[photo.id]) {
+          try {
+            const dataUrl = await blobUrlToDataUrl(photo.url)
+            updates[photo.id] = dataUrl
+            // Also update Redux so next time the data URL is already there
+            dispatch(updatePhotoUrl({ id: photo.id, url: dataUrl }))
+          } catch (e) {
+            console.warn(`Could not convert blob for ${photo.id}`, e)
+            // Keep the original (may be broken, but at least we show something)
+            updates[photo.id] = photo.url
+          }
+        } else if (photo.url) {
+          // Already a data URL or stable URL stored
+          updates[photo.id] = photo.url
+        }
+      })
+
+      await Promise.allSettled(promises)
+      setStableUrls((prev) => ({ ...prev, ...updates }))
+      setIsConverting(false)
+      conversionInProgress.current = false
+    }
+
+    convertAll()
+  }, [photos, isOpen, dispatch]) // stableUrls intentionally omitted to avoid re‑running on every update
+
+  // Get the URL to use for display/export: prefer the stable data URL
+  const getPhotoUrl = (photo) => stableUrls[photo.id] || photo.url
+
   const handleDownloadPNG = (photo) => {
+    const url = getPhotoUrl(photo)
+    if (!url) return
     const link = document.createElement('a')
-    link.href = photo.url
+    link.href = url
     link.download = `rawfoto_${photo.id}.png`
     link.click()
   }
 
   const handleDownloadTIFF = async (photo) => {
+    const sourceUrl = getPhotoUrl(photo)
+    if (!sourceUrl) return
+
     setIsExporting(true)
     try {
-      // Draw image onto a canvas to extract raw pixels
       const img = new Image()
-      img.src = photo.url
+      img.src = sourceUrl
       await new Promise((resolve, reject) => {
         img.onload = resolve
         img.onerror = reject
@@ -35,7 +109,6 @@ export function GalleryView({ isOpen, onClose }) {
       const ctx = canvas.getContext('2d')
       ctx.drawImage(img, 0, 0)
 
-      // Convert canvas to TIFF blob
       const tiffBlob = createUncompressedTiff(canvas)
       const tiffUrl = URL.createObjectURL(tiffBlob)
 
@@ -44,7 +117,6 @@ export function GalleryView({ isOpen, onClose }) {
       link.download = `rawfoto_${photo.id}.tiff`
       link.click()
 
-      // Cleanup
       setTimeout(() => URL.revokeObjectURL(tiffUrl), 1000)
     } catch (e) {
       console.error('TIFF generation error:', e)
@@ -57,6 +129,12 @@ export function GalleryView({ isOpen, onClose }) {
   const handleDelete = (id) => {
     if (confirm('Are you sure you want to delete this photo?')) {
       dispatch(deletePhoto(id))
+      // Clean up local stable URL
+      setStableUrls((prev) => {
+        const copy = { ...prev }
+        delete copy[id]
+        return copy
+      })
       if (selectedPhoto && selectedPhoto.id === id) {
         setSelectedPhoto(null)
       }
@@ -91,6 +169,14 @@ export function GalleryView({ isOpen, onClose }) {
             </button>
           </div>
 
+          {/* Conversion progress indicator */}
+          {isConverting && (
+            <div className="text-xs text-yellow-400 mb-3 flex items-center gap-2">
+              <Loader2Icon className="w-3.5 h-3.5 animate-spin" />
+              Preparing RAW files for viewing...
+            </div>
+          )}
+
           {/* Photo Grid */}
           {photos.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-neutral-500">
@@ -102,39 +188,49 @@ export function GalleryView({ isOpen, onClose }) {
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 pr-2">
-              {photos.map((photo) => (
-                <motion.div
-                  key={photo.id}
-                  layout
-                  className="group relative aspect-[3/4] bg-neutral-900 border border-neutral-800 overflow-hidden cursor-pointer"
-                  onClick={() => setSelectedPhoto(photo)}
-                >
-                  <img
-                    src={photo.url}
-                    alt="Captured RAW frame"
-                    className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500"
-                  />
-                  {/* Badge */}
-                  <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md border border-yellow-400/30 text-yellow-400 text-[10px] font-mono rounded">
-                    RAW
-                  </span>
-                  {/* Overlay on hover */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2 justify-between">
-                    <span className="text-[10px] font-mono text-white/90">
-                      ISO {photo.metadata.iso} · {photo.metadata.shutterSpeed}
+              {photos.map((photo) => {
+                const url = getPhotoUrl(photo)
+                return (
+                  <motion.div
+                    key={photo.id}
+                    layout
+                    className="group relative aspect-[3/4] bg-neutral-900 border border-neutral-800 overflow-hidden cursor-pointer"
+                    onClick={() => setSelectedPhoto(photo)}
+                  >
+                    {url ? (
+                      <img
+                        src={url}
+                        alt="Captured RAW frame"
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-neutral-600 text-xs">
+                        Image unavailable
+                      </div>
+                    )}
+                    {/* Badge */}
+                    <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md border border-yellow-400/30 text-yellow-400 text-[10px] font-mono rounded">
+                      RAW
                     </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDelete(photo.id)
-                      }}
-                      className="p-1 text-red-400 hover:text-red-500 bg-black/50 rounded transition-colors"
-                    >
-                      <Trash2Icon className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
+                    {/* Overlay on hover */}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2 justify-between">
+                      <span className="text-[10px] font-mono text-white/90">
+                        ISO {photo.metadata.iso} · {photo.metadata.shutterSpeed}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDelete(photo.id)
+                        }}
+                        className="p-1 text-red-400 hover:text-red-500 bg-black/50 rounded transition-colors"
+                      >
+                        <Trash2Icon className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )
+              })}
             </div>
           )}
 
@@ -158,7 +254,7 @@ export function GalleryView({ isOpen, onClose }) {
                 {/* Left side: big photo view */}
                 <div className="flex-1 flex items-center justify-center bg-neutral-950/40 relative min-h-0 md:min-h-full">
                   <img
-                    src={selectedPhoto.url}
+                    src={getPhotoUrl(selectedPhoto)}
                     alt="Inspect RAW Frame"
                     className="max-w-full max-h-full object-contain shadow-2xl border border-neutral-800"
                   />
@@ -176,7 +272,7 @@ export function GalleryView({ isOpen, onClose }) {
                       </span>
                     </div>
 
-                    {/* Metadata specs */}
+                    {/* Metadata specs (unchanged) */}
                     <div className="space-y-4 text-sm">
                       <div className="flex items-center gap-3 border-b border-neutral-800 pb-3">
                         <CameraIcon className="w-4 h-4 text-neutral-500" />
@@ -187,7 +283,6 @@ export function GalleryView({ isOpen, onClose }) {
                           </div>
                         </div>
                       </div>
-
                       <div className="flex items-center gap-3 border-b border-neutral-800 pb-3">
                         <InfoIcon className="w-4 h-4 text-neutral-500" />
                         <div>
@@ -197,7 +292,6 @@ export function GalleryView({ isOpen, onClose }) {
                           </div>
                         </div>
                       </div>
-
                       <div className="flex items-center gap-3 border-b border-neutral-800 pb-3">
                         <CalendarIcon className="w-4 h-4 text-neutral-500" />
                         <div>
@@ -207,7 +301,6 @@ export function GalleryView({ isOpen, onClose }) {
                           </div>
                         </div>
                       </div>
-
                       <div className="flex items-center gap-3 border-b border-neutral-800 pb-3">
                         <div className="w-4 h-4 text-neutral-500 font-mono text-xs flex items-center justify-center font-bold">W</div>
                         <div>
@@ -222,7 +315,7 @@ export function GalleryView({ isOpen, onClose }) {
                   <div className="space-y-3 mt-6">
                     <button
                       onClick={() => handleDownloadTIFF(selectedPhoto)}
-                      disabled={isExporting}
+                      disabled={isExporting || !getPhotoUrl(selectedPhoto)}
                       className="w-full flex items-center justify-center gap-2 bg-yellow-500 text-black py-3 px-4 font-bold hover:bg-yellow-400 active:scale-[0.98] transition-transform disabled:opacity-50"
                     >
                       <DownloadIcon className="w-4 h-4" />
@@ -230,7 +323,8 @@ export function GalleryView({ isOpen, onClose }) {
                     </button>
                     <button
                       onClick={() => handleDownloadPNG(selectedPhoto)}
-                      className="w-full flex items-center justify-center gap-2 bg-neutral-800 text-white py-3 px-4 font-medium border border-neutral-700 hover:bg-neutral-700 active:scale-[0.98] transition-transform"
+                      disabled={!getPhotoUrl(selectedPhoto)}
+                      className="w-full flex items-center justify-center gap-2 bg-neutral-800 text-white py-3 px-4 font-medium border border-neutral-700 hover:bg-neutral-700 active:scale-[0.98] transition-transform disabled:opacity-50"
                     >
                       <DownloadIcon className="w-4 h-4" />
                       Export PNG
