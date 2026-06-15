@@ -17,6 +17,8 @@ import {
 } from '../store/slices/cameraSlice'
 import { addPhoto } from '../store/slices/gallerySlice'
 import { Histogram } from './Histogram'
+import { motion, AnimatePresence } from 'framer-motion'
+
 import {
   Sliders,
   Camera,
