@@ -54,8 +54,14 @@ const gallerySlice = createSlice({
       state.items = []
       saveMetaToStorage([])
     },
-    // updatePhotoUrl is no longer needed — kept as a no-op for safety
-    updatePhotoUrl: (state, _action) => {},
+    updatePhotoUrl: (state, action) => {
+      const { id, url } = action.payload
+      const photo = state.items.find((item) => item.id === id)
+      if (photo) {
+        photo.url = url
+        saveGalleryToStorage(state.items)
+      }
+    },
   },
 })
 
