@@ -39,6 +39,7 @@ export function GalleryView({ isOpen, onClose }) {
 
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [errorIds, setErrorIds] = useState(new Set()) // IDs that failed to load from IndexedDB
 
   // Load blob URLs for all photos whenever gallery opens or photo list changes
   useEffect(() => {
@@ -65,12 +66,18 @@ export function GalleryView({ isOpen, onClose }) {
           if (signal.aborted) return
           try {
             const blob = await getImageBlob(id)
-            if (signal.aborted || !blob) return
+            if (signal.aborted) return
+            if (!blob) {
+              // Blob not found in IndexedDB — mark as error
+              setErrorIds((prev) => { const s = new Set(prev); s.add(id); return s })
+              return
+            }
             const url = URL.createObjectURL(blob)
             revokeQueue.current.push(url)
             setBlobUrls((prev) => ({ ...prev, [id]: url }))
           } catch (err) {
             console.warn(`Could not load image ${id} from IndexedDB:`, err)
+            setErrorIds((prev) => { const s = new Set(prev); s.add(id); return s })
           }
         })
       )
@@ -100,6 +107,27 @@ export function GalleryView({ isOpen, onClose }) {
   }, [])
 
   const getPhotoUrl = useCallback((photo) => blobUrls[photo.id] || null, [blobUrls])
+
+  /** Retry loading a single photo that previously errored */
+  const handleRetry = useCallback(async (photo) => {
+    setErrorIds((prev) => { const s = new Set(prev); s.delete(photo.id); return s })
+    setLoadingIds((prev) => { const s = new Set(prev); s.add(photo.id); return s })
+    try {
+      const blob = await getImageBlob(photo.id)
+      if (!blob) {
+        setErrorIds((prev) => { const s = new Set(prev); s.add(photo.id); return s })
+        return
+      }
+      const url = URL.createObjectURL(blob)
+      revokeQueue.current.push(url)
+      setBlobUrls((prev) => ({ ...prev, [photo.id]: url }))
+    } catch (err) {
+      console.warn('Retry failed:', err)
+      setErrorIds((prev) => { const s = new Set(prev); s.add(photo.id); return s })
+    } finally {
+      setLoadingIds((prev) => { const s = new Set(prev); s.delete(photo.id); return s })
+    }
+  }, [])
 
   // ─── Downloads ────────────────────────────────────────────────────────────
 
@@ -226,17 +254,53 @@ export function GalleryView({ isOpen, onClose }) {
               {photos.map((photo) => {
                 const url = getPhotoUrl(photo)
                 const isLoading = loadingIds.has(photo.id)
+                const hasError = errorIds.has(photo.id)
                 const tileAspect = photo.metadata?.aspectRatio === '16:9' ? 'aspect-video' : 'aspect-[3/4]'
+                const fileSizeKB = photo.metadata?.fileSize
+                  ? (photo.metadata.fileSize / 1024).toFixed(1)
+                  : null
                 return (
                   <motion.div
                     key={photo.id}
                     layout
-                    className={`group relative ${tileAspect} bg-neutral-900 border border-neutral-800 overflow-hidden cursor-pointer`}
-                    onClick={() => setSelectedPhoto(photo)}
+                    className={`group relative ${tileAspect} bg-neutral-900 border ${
+                      hasError ? 'border-red-900/60' : 'border-neutral-800'
+                    } overflow-hidden cursor-pointer`}
+                    onClick={() => !hasError && setSelectedPhoto(photo)}
                   >
                     {isLoading ? (
                       <div className="w-full h-full flex items-center justify-center text-neutral-600">
                         <Loader2Icon className="w-5 h-5 animate-spin" />
+                      </div>
+                    ) : hasError ? (
+                      /* ❌ Error card — shown when IndexedDB has no blob for this photo */
+                      <div className="w-full h-full flex flex-col items-start justify-between p-2.5 bg-neutral-950">
+                        <div className="flex items-center gap-1.5 text-red-400">
+                          <XIcon className="w-3.5 h-3.5 shrink-0" />
+                          <span className="text-[10px] font-bold font-mono leading-tight">Failed to load</span>
+                        </div>
+                        <div className="space-y-0.5 w-full">
+                          <p className="text-[9px] font-mono text-neutral-500 truncate">
+                            rawfoto_{photo.id}
+                          </p>
+                          <p className="text-[9px] font-mono text-neutral-600">
+                            {new Date(photo.timestamp).toLocaleTimeString()}
+                          </p>
+                          <p className="text-[9px] font-mono text-neutral-600">
+                            {photo.metadata?.width && photo.metadata.width > 0
+                              ? `${photo.metadata.width}×${photo.metadata.height}px`
+                              : '∞×∞ px'}
+                          </p>
+                          {fileSizeKB && (
+                            <p className="text-[9px] font-mono text-neutral-600">{fileSizeKB} KB</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRetry(photo) }}
+                          className="w-full text-[9px] font-bold font-mono text-yellow-400 border border-yellow-400/30 py-0.5 hover:bg-yellow-400/10 transition-colors"
+                        >
+                          RETRY
+                        </button>
                       </div>
                     ) : url ? (
                       <img
@@ -246,28 +310,32 @@ export function GalleryView({ isOpen, onClose }) {
                         loading="lazy"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-neutral-600 text-xs text-center px-2">
-                        Image unavailable
+                      <div className="w-full h-full flex items-center justify-center text-neutral-600">
+                        <Loader2Icon className="w-5 h-5 animate-spin" />
                       </div>
                     )}
 
-                    {/* RAW badge */}
-                    <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md border border-yellow-400/30 text-yellow-400 text-[10px] font-mono rounded">
-                      RAW
-                    </span>
-
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2 justify-between">
-                      <span className="text-[10px] font-mono text-white/90">
-                        ISO {photo.metadata.iso} · {photo.metadata.shutterSpeed}
+                    {/* RAW badge — only when loaded */}
+                    {url && !hasError && (
+                      <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md border border-yellow-400/30 text-yellow-400 text-[10px] font-mono rounded">
+                        RAW
                       </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(photo.id) }}
-                        className="p-1 text-red-400 hover:text-red-500 bg-black/50 rounded transition-colors"
-                      >
-                        <Trash2Icon className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    )}
+
+                    {/* Hover overlay — only when loaded */}
+                    {url && !hasError && (
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2 justify-between">
+                        <span className="text-[10px] font-mono text-white/90">
+                          ISO {photo.metadata.iso} · {photo.metadata.shutterSpeed}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(photo.id) }}
+                          className="p-1 text-red-400 hover:text-red-500 bg-black/50 rounded transition-colors"
+                        >
+                          <Trash2Icon className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </motion.div>
                 )
               })}

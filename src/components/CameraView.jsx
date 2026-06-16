@@ -158,7 +158,7 @@ export function CameraView({ onBack, onOpenGallery }) {
   }
 
   // Shutter action
-  const handleShutterClick = () => {
+  const handleShutterClick = async () => {
     if (!videoRef.current || !stream) return
 
     // Shutter click sound
@@ -216,38 +216,58 @@ export function CameraView({ onBack, onOpenGallery }) {
     // Draw only the cropped region at full quality — NO pixel-level colour baking
     ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
 
-    // Save as a native PNG Blob into IndexedDB — no base64, no localStorage pressure
-    // This is what fixes the "not loaded" error on Android (localStorage ~5 MB limit).
+    // ── Save blob to IndexedDB ──────────────────────────────────────────────
+    // canvas.toBlob() can return null on Android when PNG is too large for RAM.
+    // Strategy: try PNG first (lossless), fall back to JPEG 0.92 (visually identical).
     const photoId = Date.now().toString()
-    canvas.toBlob(
-      async (blob) => {
-        if (!blob) {
-          console.error('canvas.toBlob returned null — capture failed')
-          return
-        }
-        try {
-          await saveImageBlob(photoId, blob)
-        } catch (err) {
-          console.error('Failed to save image to IndexedDB:', err)
-          return
-        }
-        dispatch(
-          addPhoto({
-            id: photoId,
-            timestamp: Date.now(),
-            metadata: {
-              iso: cameraState.iso,
-              shutterSpeed: cameraState.shutterSpeed,
-              ev: cameraState.ev,
-              kelvin: cameraState.kelvin,
-              aspectRatio,
-              width: srcW,
-              height: srcH,
-            },
-          })
+
+    const saveBlobToIDB = async (mimeType) => {
+      return new Promise((resolve) => {
+        canvas.toBlob(
+          async (blob) => {
+            if (!blob) { resolve(null); return }
+            try {
+              await saveImageBlob(photoId, blob)
+              resolve({ blob, mimeType })
+            } catch (err) {
+              console.error('IndexedDB write error:', err)
+              resolve(null)
+            }
+          },
+          mimeType,
+          mimeType === 'image/jpeg' ? 0.92 : undefined
         )
-      },
-      'image/png' // lossless, raw colours
+      })
+    }
+
+    // Try PNG → if null blob fall back to JPEG
+    let result = await saveBlobToIDB('image/png')
+    if (!result) {
+      console.warn('PNG blob was null on this device — falling back to JPEG 0.92')
+      result = await saveBlobToIDB('image/jpeg')
+    }
+
+    if (!result) {
+      console.error('Both PNG and JPEG blobs failed — capture aborted')
+      return
+    }
+
+    dispatch(
+      addPhoto({
+        id: photoId,
+        timestamp: Date.now(),
+        metadata: {
+          iso: cameraState.iso,
+          shutterSpeed: cameraState.shutterSpeed,
+          ev: cameraState.ev,
+          kelvin: cameraState.kelvin,
+          aspectRatio,
+          width: srcW,
+          height: srcH,
+          mimeType: result.mimeType,
+          fileSize: result.blob.size,
+        },
+      })
     )
   }
 
