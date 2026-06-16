@@ -1,44 +1,58 @@
 import { createSlice } from '@reduxjs/toolkit'
 
-// Helper to load gallery items from localStorage
-const loadGalleryFromStorage = () => {
+/**
+ * Images are stored as Blobs in IndexedDB (see src/utils/imageDB.js).
+ * Only photo metadata + IDs are kept in Redux/localStorage — no base64 strings —
+ * so we stay well under the ~5 MB localStorage quota on all platforms including Android.
+ */
+
+const STORAGE_KEY = 'rawfoto_gallery_meta'
+
+const loadMetaFromStorage = () => {
   try {
-    const saved = localStorage.getItem('rawfoto_gallery')
-    return saved ? JSON.parse(saved) : []
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (!saved) return []
+    const items = JSON.parse(saved)
+    // Strip any legacy url fields that may have been saved before this refactor
+    return items.map(({ url: _url, ...rest }) => rest)
   } catch (e) {
-    console.error('Error loading gallery from localStorage:', e)
+    console.error('Error loading gallery metadata from localStorage:', e)
     return []
   }
 }
 
-// Helper to save gallery items to localStorage
-const saveGalleryToStorage = (items) => {
+const saveMetaToStorage = (items) => {
   try {
-    localStorage.setItem('rawfoto_gallery', JSON.stringify(items))
+    // Never persist url — blobs live in IndexedDB
+    const meta = items.map(({ url: _url, ...rest }) => rest)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(meta))
   } catch (e) {
-    console.error('Error saving gallery to localStorage:', e)
+    console.error('Error saving gallery metadata to localStorage:', e)
   }
 }
 
 const initialState = {
-  items: loadGalleryFromStorage(),
+  items: loadMetaFromStorage(),
 }
 
 const gallerySlice = createSlice({
   name: 'gallery',
   initialState,
   reducers: {
+    /** Payload: { id, timestamp, metadata }  — NO url field */
     addPhoto: (state, action) => {
-      state.items.unshift(action.payload)
-      saveGalleryToStorage(state.items)
+      // Remove url just in case caller includes it (defensive)
+      const { url: _url, ...photo } = action.payload
+      state.items.unshift(photo)
+      saveMetaToStorage(state.items)
     },
     deletePhoto: (state, action) => {
       state.items = state.items.filter((item) => item.id !== action.payload)
-      saveGalleryToStorage(state.items)
+      saveMetaToStorage(state.items)
     },
     clearGallery: (state) => {
       state.items = []
-      saveGalleryToStorage([])
+      saveMetaToStorage([])
     },
     updatePhotoUrl: (state, action) => {
       const { id, url } = action.payload
