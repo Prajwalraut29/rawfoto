@@ -1,9 +1,10 @@
 /**
- * Converts a Canvas element into an uncompressed RGB TIFF image Blob
+ * Converts a Canvas element into an uncompressed RGB TIFF/DNG image Blob
  * @param {HTMLCanvasElement} canvas
- * @returns {Blob} TIFF image Blob
+ * @param {string} [mimeType='image/tiff']
+ * @returns {Blob} TIFF or DNG image Blob
  */
-export function createUncompressedTiff(canvas) {
+export function createUncompressedTiff(canvas, mimeType = 'image/tiff') {
   const ctx = canvas.getContext('2d')
   const width = canvas.width
   const height = canvas.height
@@ -71,5 +72,9 @@ export function createUncompressedTiff(canvas) {
     writeIdx += 3
   }
 
-  return new Blob([buffer], { type: 'image/tiff' })
+  return new Blob([buffer], { type: mimeType })
+}
+
+export function createUncompressedDng(canvas) {
+  return createUncompressedTiff(canvas, 'image/dng')
 }
