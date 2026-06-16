@@ -54,14 +54,8 @@ const gallerySlice = createSlice({
       state.items = []
       saveMetaToStorage([])
     },
-    updatePhotoUrl: (state, action) => {
-      const { id, url } = action.payload
-      const photo = state.items.find((item) => item.id === id)
-      if (photo) {
-        photo.url = url
-        saveGalleryToStorage(state.items)
-      }
-    },
+    // updatePhotoUrl: no-op — images live in IndexedDB, not in Redux state
+    updatePhotoUrl: (_state, _action) => {},
   },
 })
 

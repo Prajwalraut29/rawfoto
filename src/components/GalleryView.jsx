@@ -204,11 +204,11 @@ export function GalleryView({ isOpen, onClose }) {
             </button>
           </div>
 
-          {/* Conversion progress indicator */}
-          {isConverting && (
+          {/* Loading indicator while blobs are fetched from IndexedDB */}
+          {loadingIds.size > 0 && (
             <div className="text-xs text-yellow-400 mb-3 flex items-center gap-2">
               <Loader2Icon className="w-3.5 h-3.5 animate-spin" />
-              Preparing RAW files for viewing...
+              Loading images…
             </div>
           )}
 
