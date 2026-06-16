@@ -16,7 +16,7 @@ import {
   resetCameraSettings,
 } from '../store/slices/cameraSlice'
 import { addPhoto } from '../store/slices/gallerySlice'
-import { saveImageBlob } from '../utils/imageDB'
+import { saveImageBlob, getImageBlob } from '../utils/imageDB'
 import { Histogram } from './Histogram'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -62,6 +62,28 @@ export function CameraView({ onBack, onOpenGallery }) {
   const [deviceTilt, setDeviceTilt] = useState({ alpha: 0, beta: 0, gamma: 0 })
   const [aspectRatio, setAspectRatio] = useState('3:4') // '3:4' or '16:9'
   const lastPhoto = galleryItems[0] || null
+  const [lastPhotoUrl, setLastPhotoUrl] = useState(null)
+
+  // Load blob URL for the gallery thumbnail whenever the newest photo changes
+  useEffect(() => {
+    let objectUrl = null
+    if (!lastPhoto) {
+      setLastPhotoUrl(null)
+      return
+    }
+    let cancelled = false
+    getImageBlob(lastPhoto.id)
+      .then((blob) => {
+        if (cancelled || !blob) return
+        objectUrl = URL.createObjectURL(blob)
+        setLastPhotoUrl(objectUrl)
+      })
+      .catch((err) => console.warn('Thumbnail load error:', err))
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [lastPhoto?.id]) // re-run only when the newest photo ID changes
 
   // Camera stream initialization
   useEffect(() => {
@@ -633,9 +655,9 @@ export function CameraView({ onBack, onOpenGallery }) {
             onClick={onOpenGallery}
             className="w-12 h-12 bg-neutral-850 border border-white/10 rounded-full overflow-hidden flex items-center justify-center group relative hover:border-white/30"
           >
-            {lastPhoto ? (
+            {lastPhotoUrl ? (
               <img
-                src={lastPhoto.url}
+                src={lastPhotoUrl}
                 alt="Last capture"
                 className="w-full h-full object-cover transition-transform group-hover:scale-110"
               />
