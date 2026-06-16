@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { deletePhoto, clearGallery } from '../store/slices/gallerySlice'
 import { getImageBlob, deleteImageBlob, clearAllImageBlobs } from '../utils/imageDB'
-import { createUncompressedDng } from '../utils/tiffWriter'
+import { createUncompressedTiff } from '../utils/tiffWriter'
 import { XIcon, DownloadIcon, Trash2Icon, InfoIcon, CalendarIcon, CameraIcon, Loader2Icon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -179,8 +179,8 @@ export function GalleryView({ isOpen, onClose }) {
       const ctx = canvas.getContext('2d')
       ctx.drawImage(img, 0, 0)
 
-      const dngBlob = createUncompressedDng(canvas)
-      downloadBlob(dngBlob, `rawfoto_${photo.id}.dng`)
+      const tiffBlob = createUncompressedTiff(canvas)
+      downloadBlob(tiffBlob, `rawfoto_${photo.id}.tiff`)
     } catch (err) {
       console.error('TIFF generation error:', err)
       alert('Failed to generate uncompressed TIFF.')
@@ -446,7 +446,7 @@ export function GalleryView({ isOpen, onClose }) {
                       className="w-full flex items-center justify-center gap-2 bg-yellow-500 text-black py-3 px-4 font-bold hover:bg-yellow-400 active:scale-[0.98] transition-transform disabled:opacity-50"
                     >
                       <DownloadIcon className="w-4 h-4" />
-                      {isExporting ? 'Generating DNG…' : 'Export DNG'}
+                      {isExporting ? 'Generating TIFF…' : 'Export TIFF'}
                     </button>
                     <button
                       onClick={() => handleDownloadJPEG(selectedPhoto)}
