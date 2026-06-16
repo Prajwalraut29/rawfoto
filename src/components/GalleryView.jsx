@@ -129,20 +129,28 @@ export function GalleryView({ isOpen, onClose }) {
     }
   }, [])
 
+  const downloadBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   // ─── Downloads ────────────────────────────────────────────────────────────
 
-  const handleDownloadPNG = async (photo) => {
+  const handleDownloadJPEG = async (photo) => {
     try {
       const blob = await getImageBlob(photo.id)
       if (!blob) { alert('Image not found in storage.'); return }
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `rawfoto_${photo.id}.png`
-      link.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      const extension = photo.metadata?.mimeType === 'image/png' ? 'png' : 'jpg'
+      downloadBlob(blob, `rawfoto_${photo.id}.${extension}`)
     } catch (err) {
-      console.error('PNG download error:', err)
+      console.error('JPEG download error:', err)
       alert('Failed to download image.')
     }
   }
@@ -172,12 +180,7 @@ export function GalleryView({ isOpen, onClose }) {
       ctx.drawImage(img, 0, 0)
 
       const tiffBlob = createUncompressedTiff(canvas)
-      const tiffUrl = URL.createObjectURL(tiffBlob)
-      const link = document.createElement('a')
-      link.href = tiffUrl
-      link.download = `rawfoto_${photo.id}.tiff`
-      link.click()
-      setTimeout(() => URL.revokeObjectURL(tiffUrl), 1000)
+      downloadBlob(tiffBlob, `rawfoto_${photo.id}.tiff`)
     } catch (err) {
       console.error('TIFF generation error:', err)
       alert('Failed to generate uncompressed TIFF.')
@@ -318,7 +321,7 @@ export function GalleryView({ isOpen, onClose }) {
                     {/* RAW badge — only when loaded */}
                     {url && !hasError && (
                       <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md border border-yellow-400/30 text-yellow-400 text-[10px] font-mono rounded">
-                        RAW
+                        PREVIEW
                       </span>
                     )}
 
@@ -364,7 +367,7 @@ export function GalleryView({ isOpen, onClose }) {
                   {getPhotoUrl(selectedPhoto) ? (
                     <img
                       src={getPhotoUrl(selectedPhoto)}
-                      alt="Inspect RAW Frame"
+                      alt="Inspect preview image"
                       className="max-w-full max-h-full object-contain shadow-2xl border border-neutral-800"
                     />
                   ) : (
@@ -379,9 +382,9 @@ export function GalleryView({ isOpen, onClose }) {
                 <div className="w-full md:w-80 bg-neutral-900 border border-neutral-800 p-6 flex flex-col justify-between shrink-0">
                   <div>
                     <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-lg font-display font-bold text-white">RAW File Info</h3>
+                      <h3 className="text-lg font-display font-bold text-white">Preview Image Info</h3>
                       <span className="px-2 py-0.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-mono rounded">
-                        UNCOMPRESSED PNG
+                        JPEG preview
                       </span>
                     </div>
 
@@ -443,15 +446,15 @@ export function GalleryView({ isOpen, onClose }) {
                       className="w-full flex items-center justify-center gap-2 bg-yellow-500 text-black py-3 px-4 font-bold hover:bg-yellow-400 active:scale-[0.98] transition-transform disabled:opacity-50"
                     >
                       <DownloadIcon className="w-4 h-4" />
-                      {isExporting ? 'Generating TIFF…' : 'Export RAW (.TIFF)'}
+                      {isExporting ? 'Generating TIFF…' : 'Export TIFF'}
                     </button>
                     <button
-                      onClick={() => handleDownloadPNG(selectedPhoto)}
+                      onClick={() => handleDownloadJPEG(selectedPhoto)}
                       disabled={!getPhotoUrl(selectedPhoto)}
                       className="w-full flex items-center justify-center gap-2 bg-neutral-800 text-white py-3 px-4 font-medium border border-neutral-700 hover:bg-neutral-700 active:scale-[0.98] transition-transform disabled:opacity-50"
                     >
                       <DownloadIcon className="w-4 h-4" />
-                      Export PNG
+                      Export JPEG
                     </button>
                     <button
                       onClick={() => handleDelete(selectedPhoto.id)}
