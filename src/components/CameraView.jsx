@@ -16,6 +16,7 @@ import {
   resetCameraSettings,
 } from '../store/slices/cameraSlice'
 import { addPhoto } from '../store/slices/gallerySlice'
+import { saveImageBlob } from '../utils/imageDB'
 import { Histogram } from './Histogram'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -59,6 +60,7 @@ export function CameraView({ onBack, onOpenGallery }) {
   const [activeTab, setActiveTab] = useState('exposure') // 'exposure', 'focus', 'color'
   const [flashActive, setFlashActive] = useState(false)
   const [deviceTilt, setDeviceTilt] = useState({ alpha: 0, beta: 0, gamma: 0 })
+  const [aspectRatio, setAspectRatio] = useState('3:4') // '3:4' or '16:9'
   const lastPhoto = galleryItems[0] || null
 
   // Camera stream initialization
@@ -137,7 +139,7 @@ export function CameraView({ onBack, onOpenGallery }) {
   const handleShutterClick = () => {
     if (!videoRef.current || !stream) return
 
-    // Play simulated click audio if supported, or play default shutter sound
+    // Shutter click sound
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
       const osc = audioCtx.createOscillator()
@@ -157,81 +159,73 @@ export function CameraView({ onBack, onOpenGallery }) {
 
     // Flash visual effect
     setFlashActive(true)
-    setTimeout(() => setFlashActive(false), 2000) // Flash trigger fades out
+    setTimeout(() => setFlashActive(false), 2000)
 
-    // Capture Canvas drawing
+    // ── RAW capture: full native resolution, no pixel processing ──
     const video = videoRef.current
-    const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth || 1280
-    canvas.height = video.videoHeight || 960
-    const ctx = canvas.getContext('2d')
+    const nativeW = video.videoWidth || 1920
+    const nativeH = video.videoHeight || 1080
 
-    // Capture image with current orientation/transformations if facing front camera
+    // Compute crop rectangle to match selected aspect ratio
+    const targetRatio = aspectRatio === '16:9' ? 16 / 9 : 3 / 4
+    let srcX = 0, srcY = 0, srcW = nativeW, srcH = nativeH
+    const nativeAR = nativeW / nativeH
+    if (nativeAR > targetRatio) {
+      // Wider than target → crop width
+      srcW = Math.round(nativeH * targetRatio)
+      srcX = Math.round((nativeW - srcW) / 2)
+    } else if (nativeAR < targetRatio) {
+      // Taller than target → crop height
+      srcH = Math.round(nativeW / targetRatio)
+      srcY = Math.round((nativeH - srcH) / 2)
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = srcW
+    canvas.height = srcH
+    const ctx = canvas.getContext('2d', { willReadFrequently: false })
+
+    // Mirror if front-facing camera
     if (cameraState.facingMode === 'user') {
-      ctx.translate(canvas.width, 0)
+      ctx.translate(srcW, 0)
       ctx.scale(-1, 1)
     }
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-    // Apply manual processing filters onto the canvas pixels to bake parameters into the image
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    const data = imgData.data
+    // Draw only the cropped region at full quality — NO pixel-level colour baking
+    ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
 
-    // 1. Calculate manual parameters multipliers
-    const brightnessMult = 1.0 + cameraState.ev * 0.15 // EV offset
-    const kelvinOffset = (cameraState.kelvin - 5500) / 4500 // -1.0 (cool) to 1.0 (warm)
-    const noiseLevel = (cameraState.iso - 100) / 6300 * 0.15 // ISO noise level
-
-    for (let i = 0; i < data.length; i += 4) {
-      let r = data[i]
-      let g = data[i + 1]
-      let b = data[i + 2]
-
-      // EV adjustments
-      r = Math.min(255, Math.max(0, r * brightnessMult))
-      g = Math.min(255, Math.max(0, g * brightnessMult))
-      b = Math.min(255, Math.max(0, b * brightnessMult))
-
-      // Kelvin (Color Temperature) adjustments
-      if (kelvinOffset > 0) {
-        // Warm/Amber shift (Low temperature presets are actually warm, High Kelvin is warm orange, low is cool blue)
-        r = Math.min(255, r * (1.0 + kelvinOffset * 0.15))
-        b = Math.max(0, b * (1.0 - kelvinOffset * 0.1))
-      } else {
-        // Cool/Blue shift
-        r = Math.max(0, r * (1.0 + kelvinOffset * 0.1))
-        b = Math.min(255, b * (1.0 - kelvinOffset * 0.15))
-      }
-
-      // Add ISO simulated digital grain/noise
-      if (noiseLevel > 0) {
-        const noise = (Math.random() - 0.5) * noiseLevel * 255
-        r = Math.min(255, Math.max(0, r + noise))
-        g = Math.min(255, Math.max(0, g + noise))
-        b = Math.min(255, Math.max(0, b + noise))
-      }
-
-      data[i] = r
-      data[i + 1] = g
-      data[i + 2] = b
-    }
-    ctx.putImageData(imgData, 0, 0)
-
-    const url = canvas.toDataURL('image/png')
-
-    // Add photo to Redux store
-    dispatch(
-      addPhoto({
-        id: Date.now().toString(),
-        url,
-        timestamp: Date.now(),
-        metadata: {
-          iso: cameraState.iso,
-          shutterSpeed: cameraState.shutterSpeed,
-          ev: cameraState.ev,
-          kelvin: cameraState.kelvin,
-        },
-      })
+    // Save as a native PNG Blob into IndexedDB — no base64, no localStorage pressure
+    // This is what fixes the "not loaded" error on Android (localStorage ~5 MB limit).
+    const photoId = Date.now().toString()
+    canvas.toBlob(
+      async (blob) => {
+        if (!blob) {
+          console.error('canvas.toBlob returned null — capture failed')
+          return
+        }
+        try {
+          await saveImageBlob(photoId, blob)
+        } catch (err) {
+          console.error('Failed to save image to IndexedDB:', err)
+          return
+        }
+        dispatch(
+          addPhoto({
+            id: photoId,
+            timestamp: Date.now(),
+            metadata: {
+              iso: cameraState.iso,
+              shutterSpeed: cameraState.shutterSpeed,
+              ev: cameraState.ev,
+              kelvin: cameraState.kelvin,
+              aspectRatio,
+              width: srcW,
+              height: srcH,
+            },
+          })
+        )
+      },
+      'image/png' // lossless, raw colours
     )
   }
 
@@ -269,7 +263,15 @@ export function CameraView({ onBack, onOpenGallery }) {
           Landing
         </button>
 
-        <div className="flex gap-6">
+        <div className="flex gap-6 items-center">
+          {/* Aspect Ratio Toggle */}
+          <button
+            onClick={() => setAspectRatio((prev) => (prev === '3:4' ? '16:9' : '3:4'))}
+            className="flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-bold font-mono transition-colors border-yellow-400/60 text-yellow-400 hover:bg-yellow-400/10"
+            title="Toggle Aspect Ratio"
+          >
+            {aspectRatio}
+          </button>
           <button
             onClick={() => dispatch(toggleGrid())}
             className={`p-1.5 rounded transition-colors ${cameraState.gridEnabled ? 'text-yellow-400' : 'text-neutral-500'}`}
@@ -314,7 +316,8 @@ export function CameraView({ onBack, onOpenGallery }) {
           <div
             onClick={handleViewfinderTap}
             onContextMenu={(e) => e.preventDefault()}
-            className="relative max-w-full aspect-[3/4] h-full overflow-hidden bg-black shadow-inner cursor-pointer"
+            className={`relative max-w-full h-full overflow-hidden bg-black shadow-inner cursor-pointer ${aspectRatio === '16:9' ? 'aspect-video' : 'aspect-[3/4]'
+              }`}
           >
             {/* Actual Live Video Feed */}
             <video
