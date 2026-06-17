@@ -15,8 +15,7 @@ import {
   setFocusReticle,
   resetCameraSettings,
 } from '../store/slices/cameraSlice'
-import { addPhoto } from '../store/slices/gallerySlice'
-import { saveImageBlob, getImageBlob } from '../utils/imageDB'
+import { getImageBlob } from '../utils/imageDB'
 import { Histogram } from './Histogram'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -99,8 +98,8 @@ export function CameraView({ onBack, onOpenGallery }) {
         const constraints = {
           video: {
             facingMode: { ideal: cameraState.facingMode },
-            width: { ideal: 3840 },
-            height: { ideal: 2160 },
+            width: { ideal: 4096 },
+            height: { ideal: 3072 },
           },
           audio: false,
         }
@@ -216,56 +215,27 @@ export function CameraView({ onBack, onOpenGallery }) {
     // Draw only the cropped region at full quality — NO pixel-level colour baking
     ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
 
-    // ── Capture: synchronous toDataURL → Blob ───────────────────────────────
-    // canvas.toBlob() is async & callback-based. On Android Chrome it can
-    // silently NEVER fire the callback for large PNG canvases, causing the
-    // whole async function to hang indefinitely with no photo saved.
-    // canvas.toDataURL() is SYNCHRONOUS — guaranteed to return on every browser.
-    // We then manually convert the base64 string to a Blob for IndexedDB.
-
-    // Use JPEG 0.92 — visually lossless for photos, ~10× smaller than PNG,
-    // and universally supported including all Android Chrome versions.
+    // ── Capture: synchronous toDataURL → Blob → direct download ─────────────
     const mimeType = 'image/jpeg'
     const dataUrl = canvas.toDataURL(mimeType, 1.0)
 
-    // base64 → Uint8Array → Blob (no network round-trip, works offline)
+    // base64 → Uint8Array → Blob
     const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
     const binary = atob(base64)
     const bytes = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
     const blob = new Blob([bytes], { type: mimeType })
 
-    // Unique ID: timestamp + 4-char random suffix (prevents collision if two
-    // photos are taken within the same millisecond on low-resolution clocks)
-    const photoId = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-
-    try {
-      await saveImageBlob(photoId, blob)
-    } catch (err) {
-      console.error('IndexedDB write failed:', err)
-      // If IDB is unavailable (e.g. private mode on some Android browsers),
-      // inform the user rather than silently dropping the photo.
-      alert('Could not save photo. Check that storage is not full or restricted.')
-      return
-    }
-
-    dispatch(
-      addPhoto({
-        id: photoId,
-        timestamp: Date.now(),
-        metadata: {
-          iso: cameraState.iso,
-          shutterSpeed: cameraState.shutterSpeed,
-          ev: cameraState.ev,
-          kelvin: cameraState.kelvin,
-          aspectRatio,
-          width: srcW,
-          height: srcH,
-          mimeType,
-          fileSize: blob.size,
-        },
-      })
-    )
+    // Direct download — no IndexedDB storage, no gallery entry
+    const filename = `rawfoto_${Date.now()}.jpg`
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
   }
 
   // Get current CSS Filter string for real-time live preview matching settings
