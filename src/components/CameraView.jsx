@@ -99,8 +99,8 @@ export function CameraView({ onBack, onOpenGallery }) {
         const constraints = {
           video: {
             facingMode: { ideal: cameraState.facingMode },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            width: { ideal: 3840 },
+            height: { ideal: 2160 },
           },
           audio: false,
         }
@@ -226,7 +226,7 @@ export function CameraView({ onBack, onOpenGallery }) {
     // Use JPEG 0.92 — visually lossless for photos, ~10× smaller than PNG,
     // and universally supported including all Android Chrome versions.
     const mimeType = 'image/jpeg'
-    const dataUrl = canvas.toDataURL(mimeType, 0.92)
+    const dataUrl = canvas.toDataURL(mimeType, 1.0)
 
     // base64 → Uint8Array → Blob (no network round-trip, works offline)
     const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)

@@ -60,5 +60,5 @@ export function createUncompressedTiff(canvas, mimeType = 'image/tiff') {
     writeIdx += 3
   }
 
-  return new Blob([buffer], { type: mimeType })
+  return new Blob([buffer], { type: 'application/octet-stream' })
 }
