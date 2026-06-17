@@ -1,5 +1,5 @@
 /**
- * Converts a Canvas element into an uncompressed RGB TIFF/DNG image Blob
+ * Converts a Canvas element into an uncompressed RGB TIFF/DNG image Blob.
  * @param {HTMLCanvasElement} canvas
  * @param {string} [mimeType='image/tiff']
  * @returns {Blob} TIFF or DNG image Blob
@@ -19,15 +19,15 @@ export function createUncompressedTiff(canvas, mimeType = 'image/tiff') {
   const buffer = new ArrayBuffer(totalSize)
   const view = new DataView(buffer)
 
-  // 1. Header (8 bytes)
-  view.setUint16(0, 0x4949, true) // Little-endian 'II'
-  view.setUint16(2, 42, true)     // Magic number
-  view.setUint32(4, 8, true)      // Offset to first IFD (8)
+  // 1. TIFF Header (8 bytes)
+  view.setUint16(0, 0x4949, true)  // Little-endian 'II'
+  view.setUint16(2, 42, true)      // Magic number 42
+  view.setUint32(4, 8, true)       // Offset to first IFD
 
-  // 2. IFD count of tags (2 bytes)
-  view.setUint16(8, 9, true)      // 9 entries
+  // 2. IFD – number of directory entries (9)
+  view.setUint16(8, 9, true)
 
-  // Helper to write directory entry
+  // Helper to write a 12-byte IFD entry
   let tagOffset = 10
   function writeTag(tag, type, count, value) {
     view.setUint16(tagOffset, tag, true)
@@ -37,37 +37,33 @@ export function createUncompressedTiff(canvas, mimeType = 'image/tiff') {
     tagOffset += 12
   }
 
-  // Tags definitions (must be sorted by tag ID ascending!)
-  writeTag(256, 4, 1, width)                       // ImageWidth
-  writeTag(257, 4, 1, height)                      // ImageLength
-  writeTag(258, 3, 3, 118)                         // BitsPerSample (values at offset 118)
-  writeTag(259, 3, 1, 1)                           // Compression (1 = none)
-  writeTag(262, 3, 1, 2)                           // PhotometricInterpretation (2 = RGB)
-  writeTag(273, 4, 1, 128)                         // StripOffsets (pixels start at 128)
-  writeTag(277, 3, 1, 3)                           // SamplesPerPixel (3)
-  writeTag(278, 4, 1, height)                      // RowsPerStrip
-  writeTag(279, 4, 1, imageSize)                   // StripByteCounts
+  // Tags must be sorted by tag ID (ascending)
+  writeTag(256, 4, 1, width)       // ImageWidth
+  writeTag(257, 4, 1, height)      // ImageLength
+  writeTag(258, 3, 3, 118)         // BitsPerSample (values at offset 118)
+  writeTag(259, 3, 1, 1)           // Compression (1 = no compression)
+  writeTag(262, 3, 1, 2)           // PhotometricInterpretation (2 = RGB)
+  writeTag(273, 4, 1, 128)         // StripOffsets (pixel data starts at 128)
+  writeTag(277, 3, 1, 3)           // SamplesPerPixel (3)
+  writeTag(278, 4, 1, height)      // RowsPerStrip
+  writeTag(279, 4, 1, imageSize)   // StripByteCounts
 
-  // Next IFD Offset (4 bytes)
-  view.setUint32(tagOffset, 0, true)
-  tagOffset += 4 // Should now be at 118
-
-  // BitsPerSample values (3 x SHORT)
+  // 3. BitsPerSample values – 3 x 16-bit (8,8,8) at offset 118
   view.setUint16(118, 8, true)
   view.setUint16(120, 8, true)
   view.setUint16(122, 8, true)
-  // Padding to align to 128
-  view.setUint16(124, 0, true)
-  view.setUint16(126, 0, true)
 
-  // 3. Write pixels (RGB bytes) at offset 128
+  // 4. Next IFD Offset (0 = no more IFDs) – placed AFTER BitsPerSample data
+  view.setUint32(124, 0, true)
+
+  // 5. Write raw RGB pixel data at offset 128
   const pixelView = new Uint8Array(buffer, 128, imageSize)
   let readIdx = 0
   let writeIdx = 0
   for (let i = 0; i < pixelCount; i++) {
     pixelView[writeIdx] = rgba[readIdx]       // Red
-    pixelView[writeIdx + 1] = rgba[readIdx + 1] // Green
-    pixelView[writeIdx + 2] = rgba[readIdx + 2] // Blue
+    pixelView[writeIdx + 1] = rgba[readIdx + 1]   // Green
+    pixelView[writeIdx + 2] = rgba[readIdx + 2]   // Blue
     readIdx += 4
     writeIdx += 3
   }

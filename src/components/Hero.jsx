@@ -42,7 +42,7 @@ export function Hero({ onOpenInstall }) {
               onClick={onOpenInstall}
               className="group flex items-center gap-3 bg-neutral-900 text-white px-8 py-4 font-medium hover:bg-neutral-800 transition-colors"
             >
-              Install App
+              Click Now
               <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
             <span className="text-sm text-neutral-400">
