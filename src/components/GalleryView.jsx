@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { deletePhoto, clearGallery } from '../store/slices/gallerySlice'
 import { getImageBlob, deleteImageBlob, clearAllImageBlobs } from '../utils/imageDB'
 import { createUncompressedTiff } from '../utils/tiffWriter'
+import { createMinimalDng } from '../utils/dngWriter'
 import { XIcon, DownloadIcon, Trash2Icon, InfoIcon, CalendarIcon, CameraIcon, Loader2Icon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -155,28 +156,13 @@ export function GalleryView({ isOpen, onClose }) {
   }
 
   const handleDownloadTIFF = async (photo) => {
-    const sourceUrl = getPhotoUrl(photo)
-    if (!sourceUrl) return
-
     setIsExporting(true)
     try {
       const blob = await getImageBlob(photo.id)
       if (!blob) { alert('Image not found in storage.'); return }
 
-      const img = new Image()
-      const tempUrl = URL.createObjectURL(blob)
-      img.src = tempUrl
-      await new Promise((resolve, reject) => {
-        img.onload = resolve
-        img.onerror = reject
-      })
-      URL.revokeObjectURL(tempUrl)
-
-      const canvas = document.createElement('canvas')
-      canvas.width = img.naturalWidth || img.width
-      canvas.height = img.naturalHeight || img.height
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(img, 0, 0)
+      const canvas = await blobToCanvas(blob)
+      if (!canvas) { alert('Failed to decode image.'); return }
 
       const tiffBlob = createUncompressedTiff(canvas)
       downloadBlob(tiffBlob, `rawfoto_${photo.id}.tiff`)
@@ -185,6 +171,46 @@ export function GalleryView({ isOpen, onClose }) {
       alert('Failed to generate uncompressed TIFF.')
     } finally {
       setIsExporting(false)
+    }
+  }
+
+  const handleDownloadDNG = async (photo) => {
+    setIsExporting(true)
+    try {
+      const blob = await getImageBlob(photo.id)
+      if (!blob) { alert('Image not found in storage.'); return }
+
+      const canvas = await blobToCanvas(blob)
+      if (!canvas) { alert('Failed to decode image.'); return }
+
+      const dngBlob = createMinimalDng(canvas)
+      downloadBlob(dngBlob, `rawfoto_${photo.id}.dng`)
+    } catch (err) {
+      console.error('DNG generation error:', err)
+      alert('Failed to generate DNG.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  /** Load a JPEG blob into an off-screen canvas and return it */
+  const blobToCanvas = async (blob) => {
+    const img = new Image()
+    const url = URL.createObjectURL(blob)
+    img.src = url
+    try {
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+      })
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth || img.width
+      canvas.height = img.naturalHeight || img.height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      return canvas
+    } finally {
+      URL.revokeObjectURL(url)
     }
   }
 
@@ -445,7 +471,15 @@ export function GalleryView({ isOpen, onClose }) {
                       className="w-full flex items-center justify-center gap-2 bg-yellow-500 text-black py-3 px-4 font-bold hover:bg-yellow-400 active:scale-[0.98] transition-transform disabled:opacity-50"
                     >
                       <DownloadIcon className="w-4 h-4" />
-                      {isExporting ? 'Generating TIFF…' : 'Export TIFF'}
+                      {isExporting ? 'Generating…' : 'Export TIFF'}
+                    </button>
+                    <button
+                      onClick={() => handleDownloadDNG(selectedPhoto)}
+                      disabled={isExporting || !getPhotoUrl(selectedPhoto)}
+                      className="w-full flex items-center justify-center gap-2 bg-yellow-600 text-black py-3 px-4 font-bold hover:bg-yellow-500 active:scale-[0.98] transition-transform disabled:opacity-50"
+                    >
+                      <DownloadIcon className="w-4 h-4" />
+                      {isExporting ? 'Generating…' : 'Export DNG'}
                     </button>
                     <button
                       onClick={() => handleDownloadJPEG(selectedPhoto)}
