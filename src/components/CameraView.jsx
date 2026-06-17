@@ -15,7 +15,8 @@ import {
   setFocusReticle,
   resetCameraSettings,
 } from '../store/slices/cameraSlice'
-import { getImageBlob } from '../utils/imageDB'
+import { saveImageBlob, getImageBlob } from '../utils/imageDB'
+import { addPhoto } from '../store/slices/gallerySlice'
 import { Histogram } from './Histogram'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -98,8 +99,8 @@ export function CameraView({ onBack, onOpenGallery }) {
         const constraints = {
           video: {
             facingMode: { ideal: cameraState.facingMode },
-            width: { ideal: 4096 },
-            height: { ideal: 3072 },
+            width: { min: 1920, ideal: 7680, max: 8192 },
+            height: { min: 1080, ideal: 4320, max: 6144 },
           },
           audio: false,
         }
@@ -182,7 +183,7 @@ export function CameraView({ onBack, onOpenGallery }) {
     setFlashActive(true)
     setTimeout(() => setFlashActive(false), 2000)
 
-    // ── RAW capture: full native resolution, no pixel processing ──
+    // ── Capture: full native resolution, lossless PNG ───────────────────
     const video = videoRef.current
     const nativeW = video.videoWidth || 1920
     const nativeH = video.videoHeight || 1080
@@ -215,27 +216,45 @@ export function CameraView({ onBack, onOpenGallery }) {
     // Draw only the cropped region at full quality — NO pixel-level colour baking
     ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
 
-    // ── Capture: synchronous toDataURL → Blob → direct download ─────────────
-    const mimeType = 'image/jpeg'
-    const dataUrl = canvas.toDataURL(mimeType, 1.0)
+    // ── Capture: lossless PNG → IndexedDB → gallery ─────────────────────────
+    const mimeType = 'image/png'
 
-    // base64 → Uint8Array → Blob
+    // canvas.toBlob can hang on Android for large PNGs, so we use the
+    // synchronous toDataURL path which is guaranteed to return.
+    const dataUrl = canvas.toDataURL('image/png')
     const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
     const binary = atob(base64)
     const bytes = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
     const blob = new Blob([bytes], { type: mimeType })
 
-    // Direct download — no IndexedDB storage, no gallery entry
-    const filename = `rawfoto_${Date.now()}.jpg`
-    const downloadUrl = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = downloadUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
+    const photoId = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+
+    try {
+      await saveImageBlob(photoId, blob)
+    } catch (err) {
+      console.error('IndexedDB write failed:', err)
+      alert('Could not save photo. Check that storage is not full or restricted.')
+      return
+    }
+
+    dispatch(
+      addPhoto({
+        id: photoId,
+        timestamp: Date.now(),
+        metadata: {
+          iso: cameraState.iso,
+          shutterSpeed: cameraState.shutterSpeed,
+          ev: cameraState.ev,
+          kelvin: cameraState.kelvin,
+          aspectRatio,
+          width: srcW,
+          height: srcH,
+          mimeType,
+          fileSize: blob.size,
+        },
+      })
+    )
   }
 
   // Get current CSS Filter string for real-time live preview matching settings
@@ -438,7 +457,7 @@ export function CameraView({ onBack, onOpenGallery }) {
 
             {/* Realtime EXIF values on bottom of viewfinder */}
             <div className="absolute bottom-3 left-3 px-3 py-1 bg-black/60 backdrop-blur-md rounded border border-white/10 z-20 flex items-center gap-3 text-[10px] font-mono text-white/90">
-              <span className="text-yellow-400 font-bold">RAW</span>
+              <span className="text-yellow-400 font-bold">PNG</span>
               <span>ISO {cameraState.iso}</span>
               <span>{cameraState.shutterSpeed}s</span>
               <span>{cameraState.ev >= 0 ? `+${cameraState.ev.toFixed(1)}` : cameraState.ev.toFixed(1)} EV</span>

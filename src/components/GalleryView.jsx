@@ -141,14 +141,14 @@ export function GalleryView({ isOpen, onClose }) {
 
   // ─── Downloads ────────────────────────────────────────────────────────────
 
-  const handleDownloadJPEG = async (photo) => {
+  const handleDownload = async (photo) => {
     try {
       const blob = await getImageBlob(photo.id)
       if (!blob) { alert('Image not found in storage.'); return }
       const extension = photo.metadata?.mimeType === 'image/png' ? 'png' : 'jpg'
       downloadBlob(blob, `rawfoto_${photo.id}.${extension}`)
     } catch (err) {
-      console.error('JPEG download error:', err)
+      console.error('Download error:', err)
       alert('Failed to download image.')
     }
   }
@@ -274,7 +274,7 @@ export function GalleryView({ isOpen, onClose }) {
                     ) : url ? (
                       <img
                         src={url}
-                        alt="Captured RAW frame"
+                        alt="Captured frame"
                         className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500"
                         loading="lazy"
                       />
@@ -350,7 +350,7 @@ export function GalleryView({ isOpen, onClose }) {
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-display font-bold text-white">Preview Image Info</h3>
                       <span className="px-2 py-0.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-mono rounded">
-                        JPEG preview
+                        PNG lossless
                       </span>
                     </div>
 
@@ -407,12 +407,12 @@ export function GalleryView({ isOpen, onClose }) {
                   {/* Actions */}
                   <div className="space-y-3 mt-6">
                     <button
-                      onClick={() => handleDownloadJPEG(selectedPhoto)}
+                      onClick={() => handleDownload(selectedPhoto)}
                       disabled={!getPhotoUrl(selectedPhoto)}
                       className="w-full flex items-center justify-center gap-2 bg-yellow-500 text-black py-3 px-4 font-bold hover:bg-yellow-400 active:scale-[0.98] transition-transform disabled:opacity-50"
                     >
                       <DownloadIcon className="w-4 h-4" />
-                      Export JPEG
+                      Export PNG (lossless)
                     </button>
                     <button
                       onClick={() => handleDelete(selectedPhoto.id)}
