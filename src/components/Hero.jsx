@@ -45,9 +45,6 @@ export function Hero({ onOpenInstall }) {
               Click Now
               <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
-            <span className="text-sm text-neutral-400">
-              Free. iOS & Android.
-            </span>
           </div>
         </motion.div>
 

@@ -60,15 +60,21 @@ export function Navbar({ onOpenInstall }) {
             >
               How it works
             </button>
+            <button
+              onClick={() => scrollToSection('documentation')}
+              className="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
+            >
+              Documentation
+            </button>
           </div>
 
           {/* CTA */}
           <div>
             <button
               onClick={onOpenInstall}
-              className="bg-neutral-900 text-white px-6 py-2.5 text-sm font-medium hover:bg-neutral-800 transition-colors"
+              className="bg-neutral-900 text-white px-6 py-2.5 text-sm font-medium hover:bg-neutral-800 transition-colors cursor-pointer active:scale-95"
             >
-              Install App
+              Click Now
             </button>
           </div>
         </div>
