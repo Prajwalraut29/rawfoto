@@ -12,17 +12,14 @@ export function Footer() {
         </div>
 
         <div className="flex gap-8 text-sm text-neutral-500">
-          <a href="#" className="hover:text-neutral-900 transition-colors">
+          <a href="https://prajwalr.space/" target="_blank" rel="noopener noreferrer" className="hover:text-neutral-900 transition-colors">
+            Portfolio
+          </a>
+          <a href="https://www.linkedin.com/in/prajwal-raut29/" target="_blank" rel="noopener noreferrer" className="hover:text-neutral-900 transition-colors">
+            LinkedIn
+          </a>
+          <a href="https://x.com/prajwal29Raut" target="_blank" rel="noopener noreferrer" className="hover:text-neutral-900 transition-colors">
             Twitter
-          </a>
-          <a href="#" className="hover:text-neutral-900 transition-colors">
-            Instagram
-          </a>
-          <a href="#" className="hover:text-neutral-900 transition-colors">
-            Support
-          </a>
-          <a href="#" className="hover:text-neutral-900 transition-colors">
-            Privacy
           </a>
         </div>
       </div>

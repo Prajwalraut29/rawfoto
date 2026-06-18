@@ -10,6 +10,9 @@ export default {
         sans: ['Inter', 'sans-serif'],
         display: ['Outfit', 'sans-serif'],
       },
+      screens: {
+        xs: '480px',
+      },
     },
   },
   plugins: [],

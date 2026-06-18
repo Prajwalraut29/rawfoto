@@ -18,6 +18,7 @@ import {
 import { saveImageBlob, getImageBlob } from '../utils/imageDB'
 import { addPhoto } from '../store/slices/gallerySlice'
 import { Histogram } from './Histogram'
+import { TutorialOverlay } from './TutorialOverlay'
 import { motion, AnimatePresence } from 'framer-motion'
 
 import {
@@ -63,6 +64,10 @@ export function CameraView({ onBack, onOpenGallery }) {
   const [aspectRatio, setAspectRatio] = useState('3:4') // '3:4' or '16:9'
   const lastPhoto = galleryItems[0] || null
   const [lastPhotoUrl, setLastPhotoUrl] = useState(null)
+  const [showTutorial, setShowTutorial] = useState(() => {
+    try { return !localStorage.getItem('rawfoto_tutorial_done') } catch { return false }
+  })
+  const [orientation, setOrientation] = useState('portrait')
 
   // Load blob URL for the gallery thumbnail whenever the newest photo changes
   useEffect(() => {
@@ -99,8 +104,8 @@ export function CameraView({ onBack, onOpenGallery }) {
         const constraints = {
           video: {
             facingMode: { ideal: cameraState.facingMode },
-            width: { min: 1920, ideal: 7680, max: 8192 },
-            height: { min: 1080, ideal: 4320, max: 6144 },
+            width: { ideal: 1920, max: 4096 },
+            height: { ideal: 1080, max: 2160 },
           },
           audio: false,
         }
@@ -142,6 +147,45 @@ export function CameraView({ onBack, onOpenGallery }) {
     window.addEventListener('deviceorientation', handleOrientation)
     return () => window.removeEventListener('deviceorientation', handleOrientation)
   }, [cameraState.levelEnabled])
+
+  // Auto-rotate: track screen orientation and lock when possible
+  useEffect(() => {
+    const updateOrientation = () => {
+      const isPortrait = window.innerHeight > window.innerWidth
+      setOrientation(isPortrait ? 'portrait' : 'landscape')
+    }
+
+    updateOrientation()
+    window.addEventListener('resize', updateOrientation)
+    window.addEventListener('orientationchange', updateOrientation)
+
+    // Attempt to lock orientation to portrait for camera (safe try)
+    try {
+      if (screen.orientation && typeof screen.orientation.lock === 'function') {
+        screen.orientation.lock('portrait-primary').catch(() => {})
+      }
+    } catch (e) {
+      // orientation lock not supported
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateOrientation)
+      window.removeEventListener('orientationchange', updateOrientation)
+      try {
+        if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+          screen.orientation.unlock()
+        }
+      } catch (e) {
+        // orientation unlock not supported
+      }
+    }
+  }, [])
+
+  // Handle tutorial dismiss
+  const handleTutorialDismiss = () => {
+    setShowTutorial(false)
+    try { localStorage.setItem('rawfoto_tutorial_done', 'true') } catch {}
+  }
 
   // Tap to focus simulation
   const handleViewfinderTap = (e) => {
@@ -281,50 +325,53 @@ export function CameraView({ onBack, onOpenGallery }) {
 
   return (
     <div className="fixed inset-0 z-40 bg-black flex flex-col justify-between overflow-hidden select-none font-sans">
+      {/* Tutorial Overlay */}
+      {showTutorial && <TutorialOverlay onDismiss={handleTutorialDismiss} />}
+
       {/* Top Options Bar */}
-      <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-neutral-950 text-white z-30">
+      <div className="h-14 md:h-16 border-b border-white/5 flex items-center justify-between px-3 md:px-6 bg-neutral-950 text-white z-30">
         <button
           onClick={onBack}
-          className="flex items-center gap-1 text-sm text-neutral-400 hover:text-white"
+          className="flex items-center gap-1 text-xs md:text-sm text-neutral-400 hover:text-white"
         >
-          <ArrowLeft className="w-5 h-5" />
-          Landing
+          <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
+          <span className="hidden sm:inline">Landing</span>
         </button>
 
-        <div className="flex gap-6 items-center">
+        <div className="flex gap-2 md:gap-6 items-center">
           {/* Aspect Ratio Toggle */}
           <button
             onClick={() => setAspectRatio((prev) => (prev === '3:4' ? '16:9' : '3:4'))}
-            className="flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-bold font-mono transition-colors border-yellow-400/60 text-yellow-400 hover:bg-yellow-400/10"
+            className="flex items-center gap-1 px-2 py-1 md:px-2.5 rounded border text-[10px] md:text-[11px] font-bold font-mono transition-colors border-yellow-400/60 text-yellow-400 hover:bg-yellow-400/10"
             title="Toggle Aspect Ratio"
           >
             {aspectRatio}
           </button>
           <button
             onClick={() => dispatch(toggleGrid())}
-            className={`p-1.5 rounded transition-colors ${cameraState.gridEnabled ? 'text-yellow-400' : 'text-neutral-500'}`}
+            className={`p-1 md:p-1.5 rounded transition-colors ${cameraState.gridEnabled ? 'text-yellow-400' : 'text-neutral-500'}`}
             title="Toggle Composition Grid"
           >
-            <Grid3X3 className="w-5 h-5" />
+            <Grid3X3 className="w-4 h-4 md:w-5 md:h-5" />
           </button>
           <button
             onClick={() => dispatch(toggleLevel())}
-            className={`p-1.5 rounded transition-colors ${cameraState.levelEnabled ? 'text-yellow-400' : 'text-neutral-500'}`}
+            className={`p-1 md:p-1.5 rounded transition-colors ${cameraState.levelEnabled ? 'text-yellow-400' : 'text-neutral-500'}`}
             title="Toggle Leveler"
           >
-            <Compass className="w-5 h-5" />
+            <Compass className="w-4 h-4 md:w-5 md:h-5" />
           </button>
           <button
             onClick={() => dispatch(toggleFlashMode())}
-            className={`p-1.5 rounded transition-colors ${cameraState.flashMode !== 'off' ? 'text-yellow-400' : 'text-neutral-500'} flex items-center gap-0.5`}
+            className={`p-1 md:p-1.5 rounded transition-colors ${cameraState.flashMode !== 'off' ? 'text-yellow-400' : 'text-neutral-500'} flex items-center gap-0.5`}
             title="Toggle Simulated Flash"
           >
-            <Zap className="w-5 h-5" />
-            <span className="text-[9px] uppercase font-bold">{cameraState.flashMode}</span>
+            <Zap className="w-3.5 h-3.5 md:w-5 md:h-5" />
+            <span className="text-[8px] md:text-[9px] uppercase font-bold">{cameraState.flashMode}</span>
           </button>
         </div>
 
-        <div className="w-16" />
+        <div className="w-12 md:w-16" />
       </div>
 
       {/* Main Viewfinder Section */}
@@ -456,43 +503,44 @@ export function CameraView({ onBack, onOpenGallery }) {
             <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-white/60 pointer-events-none z-10" />
 
             {/* Realtime EXIF values on bottom of viewfinder */}
-            <div className="absolute bottom-3 left-3 px-3 py-1 bg-black/60 backdrop-blur-md rounded border border-white/10 z-20 flex items-center gap-3 text-[10px] font-mono text-white/90">
+            <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 px-2 md:px-3 py-1 bg-black/60 backdrop-blur-md rounded border border-white/10 z-20 flex items-center gap-1.5 md:gap-3 text-[9px] md:text-[10px] font-mono text-white/90">
               <span className="text-yellow-400 font-bold">PNG</span>
-              <span>ISO {cameraState.iso}</span>
+              <span className="hidden xs:inline">ISO {cameraState.iso}</span>
+              <span className="xs:hidden">I{cameraState.iso}</span>
               <span>{cameraState.shutterSpeed}s</span>
-              <span>{cameraState.ev >= 0 ? `+${cameraState.ev.toFixed(1)}` : cameraState.ev.toFixed(1)} EV</span>
+              <span className="hidden sm:inline">{cameraState.ev >= 0 ? `+${cameraState.ev.toFixed(1)}` : cameraState.ev.toFixed(1)} EV</span>
               <span>{cameraState.kelvin}K</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Manual Parameters Controls Drawer */}
-      <div className="bg-neutral-900 border-t border-white/5 pb-6 pt-3 flex flex-col items-center justify-between shrink-0 z-30">
+      {/* Manual Parameters Controls Drawer - responsive */}
+      <div className={`bg-neutral-900 border-t border-white/5 pb-4 md:pb-6 pt-2 md:pt-3 flex flex-col items-center justify-between shrink-0 z-30 ${orientation === 'landscape' ? 'max-h-[45vh] overflow-y-auto' : ''}`}>
         {/* Control Sub Tabs */}
-        <div className="flex gap-8 border-b border-white/5 w-full justify-center pb-2.5 text-xs font-semibold text-neutral-400">
+        <div className="flex gap-4 md:gap-8 border-b border-white/5 w-full justify-center pb-2 text-xs font-semibold text-neutral-400 overflow-x-auto px-2">
           <button
             onClick={() => setActiveTab('exposure')}
-            className={`pb-1.5 border-b-2 transition-colors ${activeTab === 'exposure' ? 'border-yellow-400 text-white' : 'border-transparent hover:text-white'}`}
+            className={`pb-1.5 border-b-2 transition-colors shrink-0 ${activeTab === 'exposure' ? 'border-yellow-400 text-white' : 'border-transparent hover:text-white'}`}
           >
-            Exposure (ISO/Speed/EV)
+            Exposure
           </button>
           <button
             onClick={() => setActiveTab('focus')}
-            className={`pb-1.5 border-b-2 transition-colors ${activeTab === 'focus' ? 'border-yellow-400 text-white' : 'border-transparent hover:text-white'}`}
+            className={`pb-1.5 border-b-2 transition-colors shrink-0 ${activeTab === 'focus' ? 'border-yellow-400 text-white' : 'border-transparent hover:text-white'}`}
           >
-            Focus Distance
+            Focus
           </button>
           <button
             onClick={() => setActiveTab('color')}
-            className={`pb-1.5 border-b-2 transition-colors ${activeTab === 'color' ? 'border-yellow-400 text-white' : 'border-transparent hover:text-white'}`}
+            className={`pb-1.5 border-b-2 transition-colors shrink-0 ${activeTab === 'color' ? 'border-yellow-400 text-white' : 'border-transparent hover:text-white'}`}
           >
-            White Balance (WB)
+            White Balance
           </button>
         </div>
 
         {/* Tab Controls Display */}
-        <div className="w-full max-w-md px-6 py-4 flex flex-col gap-4 text-xs">
+        <div className={`w-full ${orientation === 'landscape' ? 'max-w-full px-3' : 'max-w-md px-4 md:px-6'} py-2 md:py-4 flex flex-col gap-3 md:gap-4 text-[11px] md:text-xs`}>
           {activeTab === 'exposure' && (
             <div className="space-y-4">
               {/* ISO Slider Selector */}
@@ -506,7 +554,7 @@ export function CameraView({ onBack, onOpenGallery }) {
                     <button
                       key={val}
                       onClick={() => dispatch(setIso(val))}
-                      className={`flex-1 py-2 font-mono border rounded ${cameraState.iso === val ? 'bg-white text-black border-white' : 'border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'}`}
+                      className={`flex-1 py-1.5 md:py-2 font-mono border rounded text-[10px] md:text-xs ${cameraState.iso === val ? 'bg-white text-black border-white' : 'border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'}`}
                     >
                       {val}
                     </button>
@@ -655,11 +703,11 @@ export function CameraView({ onBack, onOpenGallery }) {
         </div>
 
         {/* Shutter Button area */}
-        <div className="w-full flex items-center justify-between px-10 pt-2 max-w-sm">
+        <div className="w-full flex items-center justify-between px-6 md:px-10 pt-2 max-w-sm mx-auto">
           {/* Gallery Button Thumbnail */}
           <button
             onClick={onOpenGallery}
-            className="w-12 h-12 bg-neutral-850 border border-white/10 rounded-full overflow-hidden flex items-center justify-center group relative hover:border-white/30"
+            className="w-10 h-10 md:w-12 md:h-12 bg-neutral-850 border border-white/10 rounded-full overflow-hidden flex items-center justify-center group relative hover:border-white/30"
           >
             {lastPhotoUrl ? (
               <img
@@ -668,11 +716,11 @@ export function CameraView({ onBack, onOpenGallery }) {
                 className="w-full h-full object-cover transition-transform group-hover:scale-110"
               />
             ) : (
-              <ImageIcon className="w-5 h-5 text-neutral-500 group-hover:text-white" />
+              <ImageIcon className="w-4 h-4 md:w-5 md:h-5 text-neutral-500 group-hover:text-white" />
             )}
             {/* Gallery items counter bubble */}
             {galleryItems.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-yellow-500 text-black font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 bg-yellow-500 text-black font-bold text-[8px] md:text-[9px] w-3.5 h-3.5 md:w-4 md:h-4 rounded-full flex items-center justify-center">
                 {galleryItems.length}
               </span>
             )}
@@ -682,7 +730,7 @@ export function CameraView({ onBack, onOpenGallery }) {
           <button
             onClick={handleShutterClick}
             disabled={!stream}
-            className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center p-1 hover:bg-neutral-800 transition-colors disabled:opacity-40"
+            className="w-16 h-16 md:w-20 md:h-20 rounded-full border-[3px] md:border-4 border-white flex items-center justify-center p-1 hover:bg-neutral-800 transition-colors disabled:opacity-40"
           >
             <div className="w-full h-full bg-white rounded-full transition-transform active:scale-90 hover:scale-95" />
           </button>
@@ -690,9 +738,9 @@ export function CameraView({ onBack, onOpenGallery }) {
           {/* Switch Facing camera */}
           <button
             onClick={() => dispatch(toggleFacingMode())}
-            className="w-12 h-12 bg-neutral-900 border border-white/10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:border-white/30 active:scale-95 transition-transform"
+            className="w-10 h-10 md:w-12 md:h-12 bg-neutral-900 border border-white/10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:border-white/30 active:scale-95 transition-transform"
           >
-            <RotateCw className="w-5 h-5" />
+            <RotateCw className="w-4 h-4 md:w-5 md:h-5" />
           </button>
         </div>
       </div>
