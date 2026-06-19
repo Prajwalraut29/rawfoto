@@ -85,7 +85,6 @@ export function Features() {
           </p>
         </div>
 
-        {/* 2x3 Grid with 1px inner borders via gap and background */}
         <motion.div
           variants={containerVariants}
           initial="hidden"

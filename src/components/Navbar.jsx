@@ -12,7 +12,6 @@ export function Navbar({ onOpenInstall }) {
   }
   return (
     <>
-      {/* Top accent bar */}
       <div className="h-1 w-full bg-neutral-900" />
 
       <motion.nav
@@ -30,7 +29,6 @@ export function Navbar({ onOpenInstall }) {
         className="sticky top-0 z-40 w-full bg-white/80 backdrop-blur-md border-b border-neutral-200"
       >
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          {/* Logo */}
           <div
             className="flex items-center gap-3 cursor-pointer"
             onClick={() =>
@@ -46,7 +44,6 @@ export function Navbar({ onOpenInstall }) {
             </span>
           </div>
 
-          {/* Center Links */}
           <div className="hidden md:flex items-center gap-8">
             <button
               onClick={() => scrollToSection('features')}
@@ -68,7 +65,6 @@ export function Navbar({ onOpenInstall }) {
             </button>
           </div>
 
-          {/* CTA */}
           <div>
             <button
               onClick={onOpenInstall}

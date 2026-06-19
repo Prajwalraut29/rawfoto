@@ -37,8 +37,6 @@ import {
   SlidersHorizontal,
   Zap,
 } from 'lucide-react'
-// import { motion, AnimatePresence } from 'framer-motion'
-// Manual configuration lists
 const SHUTTER_SPEEDS = ['Auto', '1/1000', '1/500', '1/250', '1/125', '1/60', '1/30', '1/15', '1/8', '1/4', '1/2', '1s']
 const ISO_VALUES = [100, 200, 400, 800, 1600, 3200, 6400]
 const WB_PRESETS = [
@@ -69,7 +67,6 @@ export function CameraView({ onBack, onOpenGallery }) {
   })
   const [orientation, setOrientation] = useState('portrait')
 
-  // Load blob URL for the gallery thumbnail whenever the newest photo changes
   useEffect(() => {
     let objectUrl = null
     if (!lastPhoto) {
@@ -88,9 +85,8 @@ export function CameraView({ onBack, onOpenGallery }) {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [lastPhoto?.id]) // re-run only when the newest photo ID changes
+  }, [lastPhoto?.id])
 
-  // Camera stream initialization
   useEffect(() => {
     let activeStream = null
 
@@ -132,7 +128,6 @@ export function CameraView({ onBack, onOpenGallery }) {
     }
   }, [cameraState.facingMode])
 
-  // Device orientation tilt sensor for levels
   useEffect(() => {
     const handleOrientation = (e) => {
       if (cameraState.levelEnabled) {
@@ -148,7 +143,6 @@ export function CameraView({ onBack, onOpenGallery }) {
     return () => window.removeEventListener('deviceorientation', handleOrientation)
   }, [cameraState.levelEnabled])
 
-  // Auto-rotate: track screen orientation and lock when possible
   useEffect(() => {
     const updateOrientation = () => {
       const isPortrait = window.innerHeight > window.innerWidth
@@ -159,14 +153,11 @@ export function CameraView({ onBack, onOpenGallery }) {
     window.addEventListener('resize', updateOrientation)
     window.addEventListener('orientationchange', updateOrientation)
 
-    // Attempt to lock orientation to portrait for camera (safe try)
     try {
       if (screen.orientation && typeof screen.orientation.lock === 'function') {
         screen.orientation.lock('portrait-primary').catch(() => {})
       }
-    } catch (e) {
-      // orientation lock not supported
-    }
+    } catch (e) {} // eslint-disable-line no-empty
 
     return () => {
       window.removeEventListener('resize', updateOrientation)
@@ -175,19 +166,15 @@ export function CameraView({ onBack, onOpenGallery }) {
         if (screen.orientation && typeof screen.orientation.unlock === 'function') {
           screen.orientation.unlock()
         }
-      } catch (e) {
-        // orientation unlock not supported
-      }
+      } catch (e) {} // eslint-disable-line no-empty
     }
   }, [])
 
-  // Handle tutorial dismiss
   const handleTutorialDismiss = () => {
     setShowTutorial(false)
     try { localStorage.setItem('rawfoto_tutorial_done', 'true') } catch {}
   }
 
-  // Tap to focus simulation
   const handleViewfinderTap = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = ((e.clientX - rect.left) / rect.width) * 100
@@ -195,17 +182,14 @@ export function CameraView({ onBack, onOpenGallery }) {
 
     dispatch(setFocusReticle({ x, y }))
 
-    // Auto clear reticle after 2 seconds
     setTimeout(() => {
       dispatch(setFocusReticle(null))
     }, 2000)
   }
 
-  // Shutter action
   const handleShutterClick = async () => {
     if (!videoRef.current || !stream) return
 
-    // Shutter click sound
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
       const osc = audioCtx.createOscillator()
@@ -223,16 +207,13 @@ export function CameraView({ onBack, onOpenGallery }) {
       console.warn('Audio Context shutter sound error:', e)
     }
 
-    // Flash visual effect
     setFlashActive(true)
     setTimeout(() => setFlashActive(false), 2000)
 
-    // ── Capture: full native resolution, lossless PNG ───────────────────
     const video = videoRef.current
     const nativeW = video.videoWidth || 1920
     const nativeH = video.videoHeight || 1080
 
-    // Compute crop rectangle to match selected aspect ratio
     const targetRatio = aspectRatio === '16:9' ? 16 / 9 : 3 / 4
     let srcX = 0, srcY = 0, srcW = nativeW, srcH = nativeH
     const nativeAR = nativeW / nativeH
@@ -251,20 +232,16 @@ export function CameraView({ onBack, onOpenGallery }) {
     canvas.height = srcH
     const ctx = canvas.getContext('2d', { willReadFrequently: false })
 
-    // Mirror if front-facing camera
     if (cameraState.facingMode === 'user') {
       ctx.translate(srcW, 0)
       ctx.scale(-1, 1)
     }
 
-    // Draw only the cropped region at full quality — NO pixel-level colour baking
     ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
 
-    // ── Capture: lossless PNG → IndexedDB → gallery ─────────────────────────
     const mimeType = 'image/png'
 
-    // canvas.toBlob can hang on Android for large PNGs, so we use the
-    // synchronous toDataURL path which is guaranteed to return.
+    // canvas.toBlob can hang on Android; use synchronous toDataURL instead
     const dataUrl = canvas.toDataURL('image/png')
     const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
     const binary = atob(base64)
@@ -301,14 +278,12 @@ export function CameraView({ onBack, onOpenGallery }) {
     )
   }
 
-  // Get current CSS Filter string for real-time live preview matching settings
   const getPreviewFilter = () => {
     const brightness = 1.0 + cameraState.ev * 0.12
     const blur = cameraState.focusMode === 'Manual' ? Math.abs(1.0 - cameraState.focusDistance) * 3 : 0
     return `brightness(${brightness}) blur(${blur}px)`
   }
 
-  // Get current Kelvin temperature color tint for live preview
   const getKelvinOverlayColor = () => {
     const k = cameraState.kelvin
     if (k > 5500) {
@@ -325,10 +300,9 @@ export function CameraView({ onBack, onOpenGallery }) {
 
   return (
     <div className="fixed inset-0 z-40 bg-black flex flex-col justify-between overflow-hidden select-none font-sans">
-      {/* Tutorial Overlay */}
       {showTutorial && <TutorialOverlay onDismiss={handleTutorialDismiss} />}
 
-      {/* Top Options Bar */}
+      
       <div className="h-14 md:h-16 border-b border-white/5 flex items-center justify-between px-3 md:px-6 bg-neutral-950 text-white z-30">
         <button
           onClick={onBack}
@@ -339,7 +313,6 @@ export function CameraView({ onBack, onOpenGallery }) {
         </button>
 
         <div className="flex gap-2 md:gap-6 items-center">
-          {/* Aspect Ratio Toggle */}
           <button
             onClick={() => setAspectRatio((prev) => (prev === '3:4' ? '16:9' : '3:4'))}
             className="flex items-center gap-1 px-2 py-1 md:px-2.5 rounded border text-[10px] md:text-[11px] font-bold font-mono transition-colors border-yellow-400/60 text-yellow-400 hover:bg-yellow-400/10"
@@ -374,7 +347,6 @@ export function CameraView({ onBack, onOpenGallery }) {
         <div className="w-12 md:w-16" />
       </div>
 
-      {/* Main Viewfinder Section */}
       <div className="flex-1 bg-neutral-950 relative flex items-center justify-center min-h-0">
         {error ? (
           <div className="p-8 text-center text-neutral-500 max-w-sm">
@@ -394,7 +366,6 @@ export function CameraView({ onBack, onOpenGallery }) {
             className={`relative max-w-full h-full overflow-hidden bg-black shadow-inner cursor-pointer ${aspectRatio === '16:9' ? 'aspect-video' : 'aspect-[3/4]'
               }`}
           >
-            {/* Actual Live Video Feed */}
             <video
               ref={videoRef}
               autoPlay
@@ -425,7 +396,6 @@ export function CameraView({ onBack, onOpenGallery }) {
               />
             )}
 
-            {/* Shutter Visual Flash Overlay */}
             <AnimatePresence>
               {flashActive && (
                 <motion.div
@@ -438,7 +408,6 @@ export function CameraView({ onBack, onOpenGallery }) {
               )}
             </AnimatePresence>
 
-            {/* Composition Rule-of-Thirds Grid */}
             {cameraState.gridEnabled && (
               <div className="absolute inset-0 z-20 grid grid-cols-3 grid-rows-3 pointer-events-none border border-white/5">
                 <div className="border-r border-b border-white/10" />
@@ -457,11 +426,10 @@ export function CameraView({ onBack, onOpenGallery }) {
             {cameraState.levelEnabled && (
               <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
                 <div className="relative w-40 h-40 border border-white/10 rounded-full flex items-center justify-center">
-                  {/* Outer circle horizon lines */}
                   <div className="absolute w-6 h-0.5 bg-white/20 left-0" />
                   <div className="absolute w-6 h-0.5 bg-white/20 right-0" />
 
-                  {/* Level roll line */}
+                  
                   <div
                     className="w-24 h-0.5 bg-green-400 shadow-sm transition-transform duration-75"
                     style={{
@@ -469,13 +437,11 @@ export function CameraView({ onBack, onOpenGallery }) {
                       backgroundColor: Math.abs(deviceTilt.gamma) <= 1 ? '#4ade80' : '#f87171',
                     }}
                   />
-                  {/* Center Dot */}
                   <div className="absolute w-2 h-2 bg-white rounded-full" />
                 </div>
               </div>
             )}
 
-            {/* Focus Box Reticle */}
             <AnimatePresence>
               {cameraState.focusReticle && (
                 <motion.div
@@ -493,16 +459,12 @@ export function CameraView({ onBack, onOpenGallery }) {
               )}
             </AnimatePresence>
 
-            {/* Live RGB Histogram Overlay */}
             <Histogram videoRef={videoRef} isEnabled={cameraState.histogramEnabled} />
-
-            {/* Corner Bracket Overlays */}
             <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-white/60 pointer-events-none z-10" />
             <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-white/60 pointer-events-none z-10" />
             <div className="absolute bottom-6 left-6 w-8 h-8 border-b-2 border-l-2 border-white/60 pointer-events-none z-10" />
             <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-white/60 pointer-events-none z-10" />
 
-            {/* Realtime EXIF values on bottom of viewfinder */}
             <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 px-2 md:px-3 py-1 bg-black/60 backdrop-blur-md rounded border border-white/10 z-20 flex items-center gap-1.5 md:gap-3 text-[9px] md:text-[10px] font-mono text-white/90">
               <span className="text-yellow-400 font-bold">PNG</span>
               <span className="hidden xs:inline">ISO {cameraState.iso}</span>
@@ -515,10 +477,9 @@ export function CameraView({ onBack, onOpenGallery }) {
         )}
       </div>
 
-      {/* Manual Parameters Controls Drawer - responsive */}
+      
       <div className={`bg-neutral-900 border-t border-white/5 pb-4 md:pb-6 pt-2 md:pt-3 flex flex-col items-center justify-between shrink-0 z-30 ${orientation === 'landscape' ? 'max-h-[45vh] overflow-y-auto' : ''}`}>
-        {/* Control Sub Tabs */}
-        <div className="flex gap-4 md:gap-8 border-b border-white/5 w-full justify-center pb-2 text-xs font-semibold text-neutral-400 overflow-x-auto px-2">
+                <div className="flex gap-4 md:gap-8 border-b border-white/5 w-full justify-center pb-2 text-xs font-semibold text-neutral-400 overflow-x-auto px-2">
           <button
             onClick={() => setActiveTab('exposure')}
             className={`pb-1.5 border-b-2 transition-colors shrink-0 ${activeTab === 'exposure' ? 'border-yellow-400 text-white' : 'border-transparent hover:text-white'}`}
@@ -539,11 +500,9 @@ export function CameraView({ onBack, onOpenGallery }) {
           </button>
         </div>
 
-        {/* Tab Controls Display */}
-        <div className={`w-full ${orientation === 'landscape' ? 'max-w-full px-3' : 'max-w-md px-4 md:px-6'} py-2 md:py-4 flex flex-col gap-3 md:gap-4 text-[11px] md:text-xs`}>
+                <div className={`w-full ${orientation === 'landscape' ? 'max-w-full px-3' : 'max-w-md px-4 md:px-6'} py-2 md:py-4 flex flex-col gap-3 md:gap-4 text-[11px] md:text-xs`}>
           {activeTab === 'exposure' && (
             <div className="space-y-4">
-              {/* ISO Slider Selector */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between font-mono text-[10px] text-neutral-400">
                   <span>ISO SENSITIVITY</span>
@@ -562,7 +521,6 @@ export function CameraView({ onBack, onOpenGallery }) {
                 </div>
               </div>
 
-              {/* Shutter Speed Selector */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between font-mono text-[10px] text-neutral-400">
                   <span>SHUTTER SPEED</span>
@@ -581,7 +539,6 @@ export function CameraView({ onBack, onOpenGallery }) {
                 </div>
               </div>
 
-              {/* EV Compensation Slider */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between font-mono text-[10px] text-neutral-400">
                   <span>EXPOSURE COMPENSATION</span>
@@ -648,7 +605,6 @@ export function CameraView({ onBack, onOpenGallery }) {
 
           {activeTab === 'color' && (
             <div className="space-y-4">
-              {/* Preset Selector */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between font-mono text-[10px] text-neutral-400">
                   <span>WHITE BALANCE PRESET</span>
@@ -676,7 +632,6 @@ export function CameraView({ onBack, onOpenGallery }) {
                 </div>
               </div>
 
-              {/* Kelvin Temp Slider */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between font-mono text-[10px] text-neutral-400">
                   <span>COLOR TEMPERATURE</span>
@@ -702,9 +657,7 @@ export function CameraView({ onBack, onOpenGallery }) {
           )}
         </div>
 
-        {/* Shutter Button area */}
         <div className="w-full flex items-center justify-between px-6 md:px-10 pt-2 max-w-sm mx-auto">
-          {/* Gallery Button Thumbnail */}
           <button
             onClick={onOpenGallery}
             className="w-10 h-10 md:w-12 md:h-12 bg-neutral-850 border border-white/10 rounded-full overflow-hidden flex items-center justify-center group relative hover:border-white/30"
@@ -718,7 +671,7 @@ export function CameraView({ onBack, onOpenGallery }) {
             ) : (
               <ImageIcon className="w-4 h-4 md:w-5 md:h-5 text-neutral-500 group-hover:text-white" />
             )}
-            {/* Gallery items counter bubble */}
+            
             {galleryItems.length > 0 && (
               <span className="absolute -top-1 -right-1 bg-yellow-500 text-black font-bold text-[8px] md:text-[9px] w-3.5 h-3.5 md:w-4 md:h-4 rounded-full flex items-center justify-center">
                 {galleryItems.length}
@@ -726,7 +679,6 @@ export function CameraView({ onBack, onOpenGallery }) {
             )}
           </button>
 
-          {/* Core Shutter Trigger */}
           <button
             onClick={handleShutterClick}
             disabled={!stream}
@@ -735,7 +687,6 @@ export function CameraView({ onBack, onOpenGallery }) {
             <div className="w-full h-full bg-white rounded-full transition-transform active:scale-90 hover:scale-95" />
           </button>
 
-          {/* Switch Facing camera */}
           <button
             onClick={() => dispatch(toggleFacingMode())}
             className="w-10 h-10 md:w-12 md:h-12 bg-neutral-900 border border-white/10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:border-white/30 active:scale-95 transition-transform"
