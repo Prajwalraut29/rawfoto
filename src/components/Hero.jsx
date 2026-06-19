@@ -6,7 +6,6 @@ export function Hero({ onOpenInstall }) {
   return (
     <section className="pt-20 pb-32 px-6 overflow-hidden">
       <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 lg:gap-8 items-center">
-        {/* Left Content */}
         <motion.div
           initial={{
             opacity: 0,
@@ -48,7 +47,6 @@ export function Hero({ onOpenInstall }) {
           </div>
         </motion.div>
 
-        {/* Right Content - Viewfinder Mockup */}
         <motion.div
           initial={{
             opacity: 0,
@@ -64,16 +62,13 @@ export function Hero({ onOpenInstall }) {
           }}
           className="relative mx-auto w-full max-w-[400px] aspect-[3/4] bg-neutral-100 border border-neutral-200 shadow-2xl overflow-hidden"
         >
-          {/* Real Photo Background */}
           <img
             src="https://images.unsplash.com/photo-1551316679-9c6ae9dec224?q=80&w=1000&auto=format&fit=crop"
             alt="Moody street photography"
             className="absolute inset-0 w-full h-full object-cover"
           />
 
-          {/* Viewfinder UI Overlay */}
           <div className="absolute inset-0 z-10 pointer-events-none">
-            {/* Rule of thirds grid */}
             <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
               <div className="border-r border-b border-white/20" />
               <div className="border-r border-b border-white/20" />
@@ -86,16 +81,12 @@ export function Hero({ onOpenInstall }) {
               <div className="" />
             </div>
 
-            {/* Center Focus Box */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 border border-white/50" />
-
-            {/* Corner Brackets */}
             <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-white" />
             <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-white" />
             <div className="absolute bottom-24 left-6 w-8 h-8 border-b-2 border-l-2 border-white" />
             <div className="absolute bottom-24 right-6 w-8 h-8 border-b-2 border-r-2 border-white" />
 
-            {/* Bottom Manual Controls Strip */}
             <div className="absolute bottom-0 left-0 right-0 h-16 bg-black/40 backdrop-blur-md flex items-center justify-between px-6 text-white text-xs font-medium tracking-wider">
               <span>ISO 100</span>
               <span>1/250</span>

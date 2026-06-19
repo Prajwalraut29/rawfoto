@@ -54,7 +54,6 @@ export function TutorialOverlay({ onDismiss }) {
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex flex-col justify-end bg-black/70 backdrop-blur-sm"
       >
-        {/* Skip button */}
         <button
           onClick={onDismiss}
           className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-white/70 text-xs font-medium hover:bg-white/20 hover:text-white transition-colors"
@@ -63,7 +62,6 @@ export function TutorialOverlay({ onDismiss }) {
           Skip
         </button>
 
-        {/* Step indicator dots */}
         <div className="absolute top-4 left-4 flex gap-2">
           {TUTORIAL_STEPS.map((_, i) => (
             <div
@@ -73,7 +71,6 @@ export function TutorialOverlay({ onDismiss }) {
           ))}
         </div>
 
-        {/* Card */}
         <motion.div
           key={step}
           initial={{ y: 80, opacity: 0 }}
@@ -82,7 +79,6 @@ export function TutorialOverlay({ onDismiss }) {
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           className="bg-neutral-900 border-t border-white/10 rounded-t-3xl px-6 pt-8 pb-10 max-w-lg mx-auto w-full"
         >
-          {/* Icon + Title */}
           <div className="flex items-center gap-4 mb-4">
             <div className="w-12 h-12 rounded-2xl bg-yellow-500/20 flex items-center justify-center shrink-0">
               <current.icon className="w-6 h-6 text-yellow-400" />
@@ -95,10 +91,9 @@ export function TutorialOverlay({ onDismiss }) {
             </div>
           </div>
 
-          {/* Description */}
           <p className="text-sm text-neutral-300 leading-relaxed mb-6">{current.description}</p>
 
-          {/* Navigation */}
+          
           <div className="flex items-center justify-between gap-3">
             <button
               onClick={handlePrev}

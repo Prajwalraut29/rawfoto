@@ -139,8 +139,6 @@ export function GalleryView({ isOpen, onClose }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  // ─── Downloads ────────────────────────────────────────────────────────────
-
   const handleDownload = async (photo) => {
     try {
       const blob = await getImageBlob(photo.id)
@@ -155,23 +153,16 @@ export function GalleryView({ isOpen, onClose }) {
 
 
 
-  // ─── Delete ───────────────────────────────────────────────────────────────
-
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this photo?')) return
-    // Revoke object URL
     if (blobUrls[id]) {
       URL.revokeObjectURL(blobUrls[id])
       setBlobUrls((prev) => { const c = { ...prev }; delete c[id]; return c })
     }
-    // Delete from IndexedDB
     try { await deleteImageBlob(id) } catch (err) { console.warn('IDB delete error:', err) }
-    // Remove from Redux / localStorage
     dispatch(deletePhoto(id))
     if (selectedPhoto && selectedPhoto.id === id) setSelectedPhoto(null)
   }
-
-  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <AnimatePresence>
@@ -182,7 +173,6 @@ export function GalleryView({ isOpen, onClose }) {
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 bg-black/95 flex flex-col p-4 sm:p-6"
         >
-          {/* Header */}
           <div className="flex items-center justify-between border-b border-neutral-800 pb-4 mb-6">
             <div>
               <h2 className="text-2xl font-display font-bold text-white flex items-center gap-2">

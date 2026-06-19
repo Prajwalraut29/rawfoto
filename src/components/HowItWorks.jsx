@@ -31,7 +31,6 @@ export function HowItWorks({ onOpenInstall }) {
     >
       <div className="max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-12 gap-16 lg:gap-8">
-          {/* Left: Sticky Heading */}
           <div className="lg:col-span-5 lg:sticky lg:top-32 self-start">
             <div className="text-xs font-bold tracking-[0.2em] text-neutral-400 uppercase mb-6">
               How it works
@@ -48,7 +47,6 @@ export function HowItWorks({ onOpenInstall }) {
             </button>
           </div>
 
-          {/* Right: Steps List */}
           <div className="lg:col-span-7 lg:col-start-6">
             <div className="flex flex-col">
               {steps.map((step, index) => (

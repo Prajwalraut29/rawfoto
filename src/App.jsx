@@ -8,17 +8,13 @@ import { setInstallable, setInstalled } from './store/slices/pwaSlice'
 
 function AppContent() {
   const dispatch = useDispatch()
-  const [view, setView] = useState('landing') // 'landing' | 'camera'
+  const [view, setView] = useState('landing')
   const [isGalleryOpen, setIsGalleryOpen] = useState(false)
 
-  // 1. PWA installation triggers and Listeners
   useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
-      // Prevent default mini-infobar on mobile
       e.preventDefault()
-      // Store event on window object for triggering later
       window.deferredPrompt = e
-      // Notify Redux store that PWA can be installed
       dispatch(setInstallable(true))
     }
 
@@ -30,7 +26,6 @@ function AppContent() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     window.addEventListener('appinstalled', handleAppInstalled)
 
-    // Check if app is already running in standalone (installed) mode
     if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
       dispatch(setInstalled(true))
     }
@@ -41,7 +36,6 @@ function AppContent() {
     }
   }, [dispatch])
 
-  // 2. Service Worker Registration
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -63,7 +57,6 @@ function AppContent() {
         />
       )}
 
-      {/* Floating global Gallery Drawer */}
       <GalleryView isOpen={isGalleryOpen} onClose={() => setIsGalleryOpen(false)} />
     </>
   )

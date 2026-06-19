@@ -12,10 +12,8 @@ export function PwaInstallBanner() {
     const promptEvent = window.deferredPrompt
     if (!promptEvent) return
 
-    // Show the native browser install prompt
     promptEvent.prompt()
 
-    // Wait for the user to respond to the prompt
     const { outcome } = await promptEvent.userChoice
     console.log(`User response to install prompt: ${outcome}`)
 
@@ -23,7 +21,6 @@ export function PwaInstallBanner() {
       dispatch(setInstalled(true))
     }
 
-    // Clear deferredPrompt
     window.deferredPrompt = null
   }
 
@@ -31,7 +28,6 @@ export function PwaInstallBanner() {
     dispatch(dismissBanner())
   }
 
-  // Do not show if not installable, already installed, or dismissed
   const shouldShow = isInstallable && !isInstalled && !bannerDismissed
 
   return (
@@ -43,12 +39,10 @@ export function PwaInstallBanner() {
           exit={{ y: 50, opacity: 0 }}
           className="fixed bottom-6 left-6 right-6 md:left-auto md:right-6 md:w-96 z-50 bg-neutral-900 border border-neutral-800 shadow-2xl p-5 rounded-lg flex gap-4"
         >
-          {/* Icon */}
           <div className="w-12 h-12 rounded bg-yellow-500 text-black flex items-center justify-center shrink-0">
             <SmartphoneIcon className="w-6 h-6" />
           </div>
 
-          {/* Text Content */}
           <div className="flex-1 flex flex-col justify-between">
             <div>
               <h4 className="text-sm font-bold text-white leading-snug">
@@ -76,7 +70,6 @@ export function PwaInstallBanner() {
             </div>
           </div>
 
-          {/* Close button */}
           <button
             onClick={handleDismiss}
             className="absolute top-3 right-3 text-neutral-500 hover:text-neutral-300"
